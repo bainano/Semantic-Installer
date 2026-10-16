@@ -1,0 +1,53 @@
+# Demo 安装清单（install.toml）
+# 语义化安装引擎：examples/demo 的完整演示配置。
+
+[app]
+name = "Demo"
+id = "com.example.demo"
+version = "1.0.0"
+publisher = "Example Co."
+homepage = "https://example.com"
+
+[window]
+width = 900
+height = 620
+resizable = false   # 固定尺寸约束：运行时不可缩放、不可最大化
+theme = "light"
+
+[steps]
+pages = ["welcome", "license", "options", "progress", "finish"]
+
+[install]
+install_dir = "$LOCALAPPDATA/Demo App"
+copy_uninstaller = true
+
+# 文件 / 目录动作
+[[install.items]]
+type = "copy-dir"
+source = "resources/files"
+dest = "$INSTALL_DIR"
+
+[[install.items]]
+type = "write-file"
+path = "$INSTALL_DIR/install-info.txt"
+content = "Demo 1.0.0 · 由 Semantic Installer 引擎安装\n"
+
+# 桌面快捷方式
+[[install.shortcuts]]
+name = "Demo 说明"
+target = "$INSTALL_DIR/readme.txt"
+dir = "desktop"
+
+# Windows 注册表（仅 Windows 生效）
+[install.registry]
+uninstall_key = true   # 在“添加/删除程序”注册卸载入口
+[[install.registry.values]]
+path = "HKCU\\Software\\Demo App"
+name = "InstallDir"
+value = "$INSTALL_DIR"
+
+[uninstall]
+# 卸载时保留的路径（应位于安装目录之外）
+keep_user_data = ["$LOCALAPPDATA/Demo App Data"]
+remove_shortcuts = true
+remove_registry = true

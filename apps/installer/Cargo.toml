@@ -1,0 +1,20 @@
+[package]
+name = "installer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "语义化安装程序（入口二进制）"
+
+[[bin]]
+name = "installer"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+log.workspace = true
+env_logger.workspace = true
+semantic-ui.workspace = true
+flow-engine.workspace = true
+ui-adapter.workspace = true
+eframe.workspace = true

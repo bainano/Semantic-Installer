@@ -1,0 +1,21 @@
+[package]
+name = "flow-engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "跨平台安装/卸载流程引擎：清单模型、动作执行、回滚与 manifest 读写（无 GUI 依赖）"
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+log.workspace = true
+dirs.workspace = true
+crossbeam-channel.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+winreg.workspace = true
+windows.workspace = true

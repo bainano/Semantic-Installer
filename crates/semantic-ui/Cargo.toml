@@ -1,0 +1,9 @@
+[package]
+name = "semantic-ui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "类 HTML 语义标签解析与固定画布布局引擎（无 GUI 依赖）"
+
+[dependencies]

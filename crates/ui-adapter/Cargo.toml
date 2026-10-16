@@ -1,0 +1,17 @@
+[package]
+name = "ui-adapter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "egui 适配层：固定尺寸窗口壳、语义节点渲染、主题映射、字体与图片加载"
+
+[dependencies]
+anyhow.workspace = true
+log.workspace = true
+crossbeam-channel.workspace = true
+semantic-ui.workspace = true
+flow-engine.workspace = true
+eframe.workspace = true
+rfd.workspace = true
+image.workspace = true

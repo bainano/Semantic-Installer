@@ -1,0 +1,42 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/semantic-ui",
+    "crates/flow-engine",
+    "crates/ui-adapter",
+    "apps/installer",
+    "apps/uninstaller",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+license = "MIT"
+authors = ["Semantic Installer Engine Contributors"]
+description = "类 HTML 语义标签化 UI 渲染引擎 + 跨平台安装程序框架（Rust + egui）"
+
+[workspace.dependencies]
+anyhow = "1"
+thiserror = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+log = "0.4"
+env_logger = "0.11"
+dirs = "5"
+crossbeam-channel = "0.5"
+rfd = "0.15"
+image = { version = "0.25", default-features = false, features = ["png"] }
+winreg = "0.52"
+eframe = "0.35"
+semantic-ui = { path = "crates/semantic-ui" }
+flow-engine = { path = "crates/flow-engine" }
+ui-adapter = { path = "crates/ui-adapter" }
+
+[workspace.dependencies.windows]
+version = "0.58"
+features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell"]
+
+[profile.release]
+opt-level = 2

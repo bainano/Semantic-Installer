@@ -1,0 +1,33 @@
+<window title="卸载程序" width="720" height="460" theme="light">
+  <page id="confirm" title="确认卸载">
+    <column padding="36" gap="14">
+      <text size="24" weight="bold">卸载确认</text>
+      <text color="#666">卸载将删除以下内容，且无法恢复：</text>
+      <text id="summary" size="14" color="#333">- 安装目录中的全部程序文件
+- 桌面快捷方式
+- 注册表卸载登记（Windows）
+- 用户数据（由清单 keep_user_data 保护）</text>
+      <spacer/>
+      <row gap="8" align="end">
+        <button action="uninstall" primary="true">卸载</button>
+        <button action="cancel">取消</button>
+      </row>
+    </column>
+  </page>
+  <page id="progress" title="正在卸载">
+    <column padding="36" gap="14">
+      <text size="24" weight="bold">正在卸载…</text>
+      <progress id="progress"/>
+    </column>
+  </page>
+  <page id="finish" title="卸载完成">
+    <column padding="36" gap="14">
+      <text size="24" weight="bold">卸载完成</text>
+      <text color="#666">Demo 已从您的计算机移除，感谢使用。</text>
+      <spacer/>
+      <row gap="8" align="end">
+        <button action="finish" primary="true">完成</button>
+      </row>
+    </column>
+  </page>
+</window>

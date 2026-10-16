@@ -1,0 +1,20 @@
+[package]
+name = "uninstaller"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "一体化卸载工具（入口二进制，与安装器共用统一架构）"
+
+[[bin]]
+name = "uninstaller"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+log.workspace = true
+env_logger.workspace = true
+semantic-ui.workspace = true
+flow-engine.workspace = true
+ui-adapter.workspace = true
+eframe.workspace = true

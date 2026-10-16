@@ -1,0 +1,102 @@
+<window title="Demo 安装程序" width="900" height="620" theme="light">
+  <!-- ==================== 欢迎页 ==================== -->
+  <page id="welcome" title="欢迎">
+    <row>
+      <column width="260" bg="#1f6feb">
+        <image src="resources/banner.png" width="260" height="620"/>
+      </column>
+      <column gap="14" padding="44">
+        <text size="30" weight="bold">Demo 安装程序</text>
+        <text color="#888" size="14">版本 1.0.0 · 由语义化安装引擎驱动</text>
+        <spacer/>
+        <text size="15">欢迎使用 Demo。本安装程序基于类 HTML 语义标签
+渲染引擎构建，全部界面由 app.ui 一份标记文件定义。
+点击“下一步”开始安装。</text>
+        <spacer/>
+        <row gap="8" align="end">
+          <button action="next" primary="true">下一步</button>
+          <button action="cancel">取消</button>
+        </row>
+      </column>
+    </row>
+  </page>
+
+  <!-- ==================== 许可协议页 ==================== -->
+  <page id="license" title="许可协议">
+    <column gap="12" padding="44">
+      <text size="24" weight="bold">最终用户许可协议</text>
+      <divider/>
+      <label size="13" color="#666">请阅读以下协议，勾选同意后继续。</label>
+      <text id="license-body" size="14" color="#444">MIT License
+
+Copyright (c) 2026 Semantic Installer Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.</text>
+      <spacer/>
+      <checkbox id="accept-license" required="true">我已阅读并同意上述许可协议</checkbox>
+      <row gap="8" align="end">
+        <button action="back">上一步</button>
+        <button action="next" primary="true">我同意，继续</button>
+        <button action="cancel">取消</button>
+      </row>
+    </column>
+  </page>
+
+  <!-- ==================== 安装选项页 ==================== -->
+  <page id="options" title="安装选项">
+    <column gap="14" padding="44">
+      <text size="24" weight="bold">安装选项</text>
+      <text color="#888" size="13">选择安装类型与安装位置。</text>
+
+      <radio group="install-type" value="typical" checked="true">典型安装（推荐）</radio>
+      <radio group="install-type" value="custom">自定义安装</radio>
+
+      <text size="14" weight="bold">安装目录</text>
+      <input id="install-dir" placeholder="$LOCALAPPDATA/Demo App" browse="true"/>
+
+      <checkbox id="create-shortcut" checked="true">创建桌面快捷方式</checkbox>
+
+      <spacer/>
+      <row gap="8" align="end">
+        <button action="back">上一步</button>
+        <button action="install" primary="true">安装</button>
+        <button action="cancel">取消</button>
+      </row>
+    </column>
+  </page>
+
+  <!-- ==================== 安装进度页 ==================== -->
+  <page id="progress" title="正在安装">
+    <column gap="16" padding="44">
+      <text size="24" weight="bold">正在安装…</text>
+      <progress id="progress"/>
+      <spacer/>
+      <text id="progress-hint" size="13" color="#999">请勿关闭窗口。</text>
+    </column>
+  </page>
+
+  <!-- ==================== 完成页 ==================== -->
+  <page id="finish" title="安装完成">
+    <column gap="14" padding="44">
+      <text size="24" weight="bold">安装完成</text>
+      <text color="#666">Demo 已成功安装到您的计算机。</text>
+      <text size="13" color="#999">已创建卸载入口（可通过“控制面板 → 程序和功能”卸载）。</text>
+      <spacer/>
+      <row gap="8" align="end">
+        <button action="finish" primary="true">完成</button>
+      </row>
+    </column>
+  </page>
+</window>
