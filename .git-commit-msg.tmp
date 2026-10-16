@@ -1,0 +1,10 @@
+feat: 图层 Layer、多语言 i18n 与简单样式动画（Phase 9-11）
+
+- 图层：page 直接子节点 <layer> 在同一固定画布按 z 序叠加，支持 bg 背景与整幅画布独立布局
+- 多语言：lang/*.toml 资源 + --lang > 窗口 locale > 系统语言 > zh-CN 优先级链，
+  select id=locale 运行时切换，安装后写入配置/注册表联动
+- 动画：animate 声明式样式动画（fade-in/slide/spin/pulse/scale-in，infinite/delay），
+  渲染期时间插值 + 进度条平滑过渡
+- 修复：spacer 声明 width/height 时按固定尺寸占用（此前被无条件当作弹性 Fill）
+- 文档：markup-reference/architecture/secondary-development/testing 同步更新
+- 测试 54 项全绿，clippy -D warnings 零警告

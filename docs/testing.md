@@ -14,13 +14,19 @@ cargo clippy --all-targets -- -D warnings
 
 | 目标 | 数量 | 覆盖 |
 | --- | --- | --- |
-| `semantic-ui` | 25 | 词法 / 语法 / 错误定位 / 实体解码 / 布局数学（固定 / 比例 / 弹性 / 对齐）/ 页面校验 |
-| `flow-engine` | 18 | 清单解析 / 占位符解析 / 动作构建 / 执行器（temp 目录真实文件操作）/ 失败逆序回滚 / 取消回滚 / 记录往返 |
+| `semantic-ui` | 34 | 词法 / 语法 / 错误定位 / 实体解码 / 布局数学（固定 / 比例 / 弹性 / 对齐）/ 页面校验 / 图层（z 序叠加、spacer 固定宽度）/ i18n（加载 / 回退 / 替换）/ 动画语法解析 |
+| `flow-engine` | 19 | 清单解析 / 占位符解析 / 动作构建 / 执行器（temp 目录真实文件操作）/ 失败逆序回滚 / 取消回滚 / 记录往返 / 语言联动（追加写配置 + 注册表动作） |
+| `ui-adapter` | 1 | 无头点击回归（按钮命中 / 动作分发） |
 
 ### 测试要点
 
 - 布局引擎用 `Stub` 度量器验证固定画布数学：`Auto / Fixed / Fill / Weight(n)`、
-  `spacer` 弹性、`align` 作用于 leftover、容器跨轴撑满、溢出告警。
+  `spacer` 弹性与固定宽度、`align` 作用于 leftover、容器跨轴撑满、溢出告警；
+  图层模式下每个图层在整幅画布独立布局（`layer_models_stack_on_full_canvas` 等）。
+- i18n：`I18n::load` 读 `lang/*.toml`（扁平键与嵌套节归一为点分键）、缺失键回退空、
+  `resolve_i18n` 递归替换 `text/label/button/link/checkbox/radio` 的 `i18n` 键。
+- 动画：`parse_animate` 解析 `fade-in 300ms / slide-up 400ms / spin 1200ms infinite / delay`，
+  缺省时长与非法语法回退。
 - 执行器在 `std::env::temp_dir()` 下创建真实文件验证复制 / 写入 / 删除与**逆序回滚**
   （先建目录 → 再建子文件，失败后子文件先删、目录后删）。
 - `--dry-run` 是二进制级验证：不触碰文件系统，仅构建并打印动作计划，
@@ -43,8 +49,11 @@ uninstaller.exe --record <path\to\uninstall.json> --dry-run
 
 1. `cargo build --release`；
 2. 运行安装器（demo 配置），检查：窗口按配置尺寸出现、不可缩放、不可最大化；
-   中文渲染正常；欢迎页 banner 显示；「下一步」在许可未勾选时禁用、勾选后可用；
-   页面导航正确；安装进度条随动作推进；完成后进入完成页并写入 uninstall.json。
+   中文渲染正常；欢迎页 banner 显示与前景文字完整（图层叠加）；欢迎页进入动画播放一次后静止；
+   「下一步」在许可未勾选时禁用、勾选后可用；页面导航正确；安装进度条随动作推进（平滑过渡）；
+   完成后进入完成页并写入 uninstall.json。
+3. 在安装选项页切换语言下拉（zh-CN ↔ en-US）：整界面语言即时切换；
+   完成安装后检查安装目录 `config/locale` 文件与注册表 `Locale` 值与所选语言一致。
 3. 从「控制面板 → 程序和功能」（或直接运行卸载器）卸载：确认页 → 进度 → 完成，
    安装目录被清理；`keep_user_data` 指定的路径保留。
 4. 关闭窗口时（安装进行中）应先出现取消回滚再退出，不留残留文件。

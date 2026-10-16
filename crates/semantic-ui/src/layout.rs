@@ -119,7 +119,18 @@ pub struct LayoutResult {
     pub warnings: Vec<String>,
 }
 
+/// 单个图层的布局模型：与页面同画布、独立布局、默认透明背景，
+/// z 序由 `PageModel::layers` 中声明顺序决定（后声明者在上）。
+#[derive(Debug)]
+pub struct LayerModel {
+    pub id: Option<String>,
+    pub nodes: Vec<Node>,
+    pub rects: Vec<Rect>,
+}
+
 /// 单个页面的布局模型：扁平化节点 + 对应矩形。
+/// 当页面包含 `<layer>` 子节点时，`layers` 非空（渲染按层叠加）；
+/// 否则 `layers` 为空（渲染沿用 `nodes`/`rects` 单层旧路径）。
 #[derive(Debug)]
 pub struct PageModel {
     pub id: String,
@@ -128,6 +139,7 @@ pub struct PageModel {
     pub rects: Vec<Rect>,
     pub warnings: Vec<String>,
     pub canvas: Rect,
+    pub layers: Vec<LayerModel>,
 }
 
 pub fn parse_align(s: Option<&str>) -> Align {
@@ -160,7 +172,7 @@ pub fn parse_size(s: Option<&str>) -> Size {
 }
 
 fn is_container(node: &Node) -> bool {
-    node.is("row") || node.is("column") || node.is("page")
+    node.is("row") || node.is("column") || node.is("layer") || node.is("page")
 }
 
 /// 深度优先扁平化（克隆节点，index 0 为 page 自身）。
@@ -189,6 +201,37 @@ pub fn layout_page(
         .to_owned();
     let mut res = LayoutResult::default();
     layout_node(page, canvas, theme, m, &mut res);
+
+    // 图层模式：page 直接子节点为 <layer> 时，每个图层在整幅画布上独立布局
+    let has_layers = page.children.iter().any(|c| c.is("layer"));
+    let mut layers = Vec::new();
+    if has_layers {
+        for layer in &page.children {
+            if !layer.is("layer") {
+                res.warnings.push(format!(
+                    "图层模式：<page> 直接子节点 <{}>（第 {} 行）不在任何图层内，将被忽略。",
+                    layer.tag,
+                    layer.span.line
+                ));
+                continue;
+            }
+            if layer.children.iter().any(|c| c.is("layer")) {
+                res.warnings.push(format!(
+                    "<layer>（第 {} 行）不允许嵌套图层，嵌套内容将按普通容器处理。",
+                    layer.span.line
+                ));
+            }
+            let mut lres = LayoutResult::default();
+            layout_node(layer, canvas, theme, m, &mut lres);
+            res.warnings.extend(lres.warnings);
+            layers.push(LayerModel {
+                id: layer.attr("id").map(str::to_owned),
+                nodes: flatten(layer),
+                rects: lres.rects,
+            });
+        }
+    }
+
     Ok(PageModel {
         id,
         title: page.attr("title").map(str::to_owned),
@@ -196,6 +239,7 @@ pub fn layout_page(
         rects: res.rects,
         warnings: res.warnings,
         canvas,
+        layers,
     })
 }
 
@@ -273,12 +317,13 @@ fn intrinsic(node: &Node, theme: &Theme, m: &dyn Measurer) -> (f32, f32) {
 
 /// 子节点主轴声明尺寸（默认按标签语义）。
 fn child_main_size(child: &Node, axis: Axis) -> Size {
-    if child.is("spacer") {
-        return Size::Fill;
-    }
+    // 先解析显式主轴尺寸属性（spacer 也可声明固定 width/height）
     let attr = axis.main_attr();
     if let Some(v) = child.attr(attr) {
         return parse_size(Some(v));
+    }
+    if child.is("spacer") {
+        return Size::Fill;
     }
     if let Some(w) = child.attr_f64("weight")
         && w > 0.0 {
@@ -525,5 +570,81 @@ mod tests {
         let page = model.rects[0];
         assert_eq!(page.w, 900.0);
         assert_eq!(page.h, 620.0);
+    }
+
+    /// 图层前景层：spacer 声明固定宽度时应让出对应空间（column 不被推到右缘）。
+    #[test]
+    fn layer_fg_spacer_fixed_width_keeps_column_left() {
+        let model = layout(
+            r#"<window width="900" height="620"><page id="p">
+              <layer id="bg"><image src="bg.png" width="260" height="620"/></layer>
+              <layer id="fg"><row><spacer width="260"/><column padding="40"><text size="30">Demo 安装程序</text></column></row></layer>
+            </page></window>"#,
+        );
+        let fg = &model.layers[1];
+        // 扁平顺序：0=layer, 1=row, 2=spacer, 3=column, 4=text
+        let spacer = fg.rects[2];
+        let column = fg.rects[3];
+        let text = fg.rects[4];
+        assert!(
+            (spacer.w - 260.0).abs() < 0.5,
+            "spacer 固定宽度 260 应生效：{spacer:?}"
+        );
+        assert!(
+            column.x > spacer.w && column.x < spacer.w + 16.0,
+            "column 应紧贴 spacer 之后：{column:?}"
+        );
+        assert!(
+            column.w > 100.0 && text.x >= column.x && text.right() <= column.right() + 0.5,
+            "text 应在 column 内完整排布：{text:?} {column:?}"
+        );
+    }
+
+    #[test]
+    fn layer_models_stack_on_full_canvas() {
+        let model = layout(
+            r#"<window width="900" height="620"><page id="p">
+              <layer id="bg"><image src="bg.png" width="900" height="620"/></layer>
+              <layer id="fg"><column padding="36"><text>hi</text></column></layer>
+            </page></window>"#,
+        );
+        assert_eq!(model.layers.len(), 2, "应生成 2 个图层");
+        let bg = &model.layers[0];
+        let fg = &model.layers[1];
+        assert_eq!(bg.id.as_deref(), Some("bg"));
+        assert_eq!(fg.id.as_deref(), Some("fg"));
+        // 每层节点 0 = layer 自身，矩形 = 整幅画布（z 序叠加、独立布局）
+        assert_eq!(bg.rects[0], Rect::new(0.0, 0.0, 900.0, 620.0));
+        assert_eq!(fg.rects[0], Rect::new(0.0, 0.0, 900.0, 620.0));
+        assert_eq!(bg.nodes.len(), 2, "bg 层：layer + image");
+        // 前景层文字独立布局，不受背景层内容影响
+        assert_eq!(fg.nodes[2].tag, "text");
+        assert_eq!(fg.nodes[2].text_of(""), "hi");
+        // 两层子节点矩形互不引用（各自独立计数）
+        assert!(bg.rects[1].w > 0.0 && fg.rects[2].w > 0.0);
+    }
+
+    #[test]
+    fn page_without_layers_keeps_legacy_path() {
+        let model = layout(
+            r#"<window width="900" height="620"><page id="p"><text>hi</text></page></window>"#,
+        );
+        assert!(model.layers.is_empty(), "无 <layer> 时保持单层旧路径");
+    }
+
+    #[test]
+    fn mixed_page_children_warn_when_layers_present() {
+        let model = layout(
+            r#"<window width="900" height="620"><page id="p">
+              <layer id="bg"><image src="bg.png" width="900" height="620"/></layer>
+              <text>游离节点</text>
+            </page></window>"#,
+        );
+        assert_eq!(model.layers.len(), 1);
+        assert!(
+            model.warnings.iter().any(|w| w.contains("游离节点") || w.contains("将被忽略")),
+            "图层模式下游离子节点应产生警告：{:?}",
+            model.warnings
+        );
     }
 }

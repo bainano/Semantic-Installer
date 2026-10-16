@@ -3,6 +3,7 @@
 //! 用法：
 //! ```text
 //! installer --manifest install.toml --markup app.ui [--theme light|dark]
+//!           [--lang zh-CN|en-US]                  # 覆盖语言（缺省：<window locale> > 系统 > zh-CN）
 //!           [--uninstaller path\to\uninstaller.exe]
 //!           [--record uninstall.json]          # 等价于 --mode uninstall
 //!           [--dry-run install|uninstall]      # 无 GUI 全流程模拟
@@ -19,6 +20,7 @@ struct Args {
     manifest: PathBuf,
     markup: PathBuf,
     theme: Option<String>,
+    lang: Option<String>,
     uninstaller: Option<PathBuf>,
     record: Option<PathBuf>,
     app_id: Option<String>,
@@ -31,6 +33,7 @@ fn parse_args() -> Args {
         manifest: PathBuf::from("install.toml"),
         markup: PathBuf::from("app.ui"),
         theme: None,
+        lang: None,
         uninstaller: None,
         record: None,
         app_id: None,
@@ -52,6 +55,7 @@ fn parse_args() -> Args {
             "--manifest" => args.manifest = PathBuf::from(val("--manifest").unwrap()),
             "--markup" => args.markup = PathBuf::from(val("--markup").unwrap()),
             "--theme" => args.theme = Some(val("--theme").unwrap()),
+            "--lang" => args.lang = Some(val("--lang").unwrap()),
             "--uninstaller" => args.uninstaller = Some(PathBuf::from(val("--uninstaller").unwrap())),
             "--record" => args.record = Some(PathBuf::from(val("--record").unwrap())),
             "--app-id" => args.app_id = Some(val("--app-id").unwrap()),
@@ -60,7 +64,8 @@ fn parse_args() -> Args {
             "--help" | "-h" => {
                 println!(
                     "用法：installer [--manifest PATH] [--markup PATH] [--theme light|dark]\n  \
-                     [--uninstaller PATH] [--record uninstall.json] [--dry-run install|uninstall] [--log PATH]"
+                     [--lang zh-CN|en-US] [--uninstaller PATH] [--record uninstall.json]\n  \
+                     [--dry-run install|uninstall] [--log PATH]"
                 );
                 std::process::exit(0);
             }
@@ -121,6 +126,7 @@ fn run_gui(mode: Mode, args: &Args, flow: &FlowSpec, record: Option<flow_engine:
         theme_override: args.theme.clone(),
         uninstaller_path: args.uninstaller.clone(),
         record,
+        lang: args.lang.clone(),
     };
     let app = InstallerApp::new(opts);
 
@@ -194,6 +200,7 @@ fn main() -> ExitCode {
                     install_dir_override: None,
                     create_shortcut: true,
                     uninstaller_path: args.uninstaller.clone(),
+                    locale: args.lang.clone(),
                 };
                 match dry_run_install(&flow, root, &inputs) {
                     Ok(lines) => {

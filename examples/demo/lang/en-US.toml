@@ -1,0 +1,43 @@
+# Demo installer UI — English language resource (en-US)
+# Keys map to the i18n attribute on nodes in app.ui / uninstall.ui;
+# missing keys fall back to the default text inside the markup.
+
+welcome.title = "Demo Installer"
+welcome.subtitle = "Version 1.0.0 · Powered by the Semantic Installer Engine"
+welcome.body = "Welcome to Demo. This installer is built on a class-HTML semantic tag\nrendering engine; the whole UI is defined in a single markup file app.ui.\nClick “Next” to start."
+
+button.next = "Next"
+button.back = "Back"
+button.cancel = "Cancel"
+button.install = "Install"
+button.finish = "Finish"
+button.agree = "I Agree, Continue"
+
+license.title = "End User License Agreement"
+license.hint = "Please read the agreement below, then check the box to continue."
+license.accept = "I have read and agree to the above license agreement"
+
+options.title = "Installation Options"
+options.hint = "Choose the install type and location."
+options.type.typical = "Typical (recommended)"
+options.type.custom = "Custom"
+options.dir = "Install directory"
+options.shortcut = "Create a desktop shortcut"
+options.language = "UI language (installed app follows this language)"
+
+progress.title = "Installing…"
+progress.hint = "Please keep the window open."
+
+finish.title = "Installation Complete"
+finish.done = "Demo has been successfully installed on your computer."
+finish.uninstall.hint = "An uninstall entry has been created (via “Control Panel → Programs and Features”)."
+
+uninstall.title = "Confirm Uninstall"
+uninstall.hint = "Uninstalling will remove the following and cannot be undone:"
+uninstall.summary = "- All program files in the install directory\n- Start menu / desktop shortcuts\n- Registry uninstall entry (Windows)\n- User data (protected by manifest keep_user_data)"
+uninstall.do = "Uninstall"
+uninstall.cancel = "Cancel"
+uninstall.progress = "Uninstalling…"
+uninstall.done = "Uninstall Complete"
+uninstall.bye = "Thank you for using Demo. Goodbye."
+uninstall.finish = "Finish"

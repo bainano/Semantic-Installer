@@ -1,0 +1,43 @@
+# Demo 安装界面中文语言资源（zh-CN）
+# 键与 app.ui / uninstall.ui 中节点的 i18n 属性对应；
+# 缺失的键回退为标记内的默认文本。
+
+welcome.title = "Demo 安装程序"
+welcome.subtitle = "版本 1.0.0 · 由语义化安装引擎驱动"
+welcome.body = "欢迎使用 Demo。本安装程序基于类 HTML 语义标签\n渲染引擎构建，全部界面由 app.ui 一份标记文件定义。\n点击“下一步”开始安装。"
+
+button.next = "下一步"
+button.back = "上一步"
+button.cancel = "取消"
+button.install = "安装"
+button.finish = "完成"
+button.agree = "我同意，继续"
+
+license.title = "最终用户许可协议"
+license.hint = "请阅读以下协议，勾选同意后继续。"
+license.accept = "我已阅读并同意上述许可协议"
+
+options.title = "安装选项"
+options.hint = "选择安装类型与安装位置。"
+options.type.typical = "典型安装（推荐）"
+options.type.custom = "自定义安装"
+options.dir = "安装目录"
+options.shortcut = "创建桌面快捷方式"
+options.language = "界面语言（安装后程序将跟随此语言）"
+
+progress.title = "正在安装…"
+progress.hint = "请勿关闭窗口。"
+
+finish.title = "安装完成"
+finish.done = "Demo 已成功安装到您的计算机。"
+finish.uninstall.hint = "已创建卸载入口（可通过“控制面板 → 程序和功能”卸载）。"
+
+uninstall.title = "卸载确认"
+uninstall.hint = "卸载将删除以下内容，且无法恢复："
+uninstall.summary = "- 安装目录中的全部程序文件\n- 开始菜单 / 桌面快捷方式\n- 注册表卸载登记（Windows）\n- 用户数据（由清单 keep_user_data 保护）"
+uninstall.do = "卸载"
+uninstall.cancel = "取消"
+uninstall.progress = "正在卸载…"
+uninstall.done = "卸载完成"
+uninstall.bye = "感谢使用，再见。"
+uninstall.finish = "完成"

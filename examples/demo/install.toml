@@ -51,3 +51,9 @@ value = "$INSTALL_DIR"
 keep_user_data = ["$LOCALAPPDATA/Demo App Data"]
 remove_shortcuts = true
 remove_registry = true
+
+# 多语言联动：安装时把界面所选语言写入应用配置与注册表，
+# 被安装程序（Demo）启动时读取即可跟随语言。
+[locale]
+write_file = "config/locale"                       # 安装目录下 config/locale 文件（内容 = 语言代码）
+write_registry = "HKCU\\Software\\Demo App"        # 注册表值 Locale（路径键名固定为 Locale）

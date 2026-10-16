@@ -35,6 +35,8 @@
 - 权威尺寸来源：语义标记 `<window width height>`；`install.toml` 的 `[window]` 段为可选覆盖。
 - 运行时：`eframe::ViewportBuilder::with_inner_size([w, h]).with_resizable(false).with_maximized(false)`，
   窗口不可拖动缩放、不可最大化。
+- 画布尺寸为**逻辑单位**：在高 DPI 显示器上，egui 按系统缩放（native pixels-per-point）把逻辑画布
+  放大为物理像素渲染，窗口物理尺寸 = 逻辑 × 系统缩放；布局始终以逻辑画布为权威，所见即所得。
 - 布局引擎基于固定画布（fixed canvas）确定性计算：解析期即可算出每个节点的矩形，
   无需测量反馈循环；内容超出画布时产生**解析期告警**。
 - 明确不做：滚动、响应式 / 自适应重排。未来版本可在此模型上扩展响应式布局，不推翻现有模型。
@@ -64,10 +66,16 @@
   - 固定像素尺寸（`width="240"` / `height="36"`）；
   - `weight="n"` 按比例分配剩余空间；
   - `fill`（缺省）占满剩余空间；
-  - `spacer` 弹性占位；
+  - `spacer` 弹性占位（可声明 `width`/`height` 固定间隙）；
   - `gap`（间距）、`padding`（内边距）、`align`（Start / Center / End，作用于分配后的剩余空间）。
 - 容器跨轴默认撑满；文本尺寸由 `Measurer` 抽象提供（GUI 层用真实字体度量，测试用桩）。
-- 输出 `PageModel { id, title, nodes, rects, warnings, canvas }`——每个控件一个确定矩形。
+- **图层**：`<page>` 直接子节点为 `<layer>` 时，每个图层在**同一整幅画布**上独立布局，
+  渲染按声明顺序（z 序）叠加；`bg` 属性可为图层铺背景色。非 layer 直接子节点忽略并告警，禁止嵌套图层。
+- **i18n**：`lang/{locale}.toml` 键值资源，布局前按当前语言把 `i18n` 键文本替换进节点
+  （未命中回退默认文本）；`select id="locale"` 运行时切换即整页重布局重渲染。
+- **动画**：`animate="<kind> <dur>ms [infinite] [delay <n>ms]"` 为**渲染期**时间插值
+  （fade/slide/spin/pulse/scale-in），不侵入布局矩形；一次性动画随页面进入播放。
+- 输出 `PageModel { id, title, nodes, rects, warnings, canvas, layers }`——每个控件一个确定矩形。
 
 ### 3.3 组件模型与校验
 
@@ -136,7 +144,8 @@ Idle → Validating（构建动作计划）→ Executing（后台）→ Progress
 
 - **固定窗口壳**：尺寸仅来自配置；`with_resizable(false)` + 禁最大化。
 - **渲染**：`PageModel` 节点树 → egui 组件——自绘按钮（圆角 / 主色 / 悬停 / 禁用）、
-  自绘单选与进度条、`TextEdit` / `Checkbox` / `ComboBox` / `Texture`（PNG banner）映射。
+  自绘单选与进度条、`TextEdit` / `Checkbox` / `ComboBox` / `Texture`（PNG banner）映射；
+  图层按 z 序整层渲染；动画用 `Painter` 的透明度 / 位移 / 旋转（`RectShape::with_angle`）/ 缩放实现。
   图标一律矢量绘制（`egui::Painter`），不使用 emoji / 表情字符。
 - **字体**：探测系统 CJK 字体注入 `FontDefinitions`（Windows msyh / macOS PingFang /
   Linux NotoSansCJK），缺失时降级并告警。

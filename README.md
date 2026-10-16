@@ -8,9 +8,14 @@
 
 ## 特性
 
-- **类 HTML 语义标记**：`<window>` `<page>` `<row>` `<column>` `<text>` `<button>` `<input>`
+- **类 HTML 语义标记**：`<window>` `<page>` `<layer>` `<row>` `<column>` `<text>` `<button>` `<input>`
   `<checkbox>` `<radio>` `<select>` `<progress>` `<image>` `<link>` 等；手写词法 + 递归下降解析器，
   解析错误带行列号。
+- **图层（Layer）**：同一固定画布上多层 z 序叠加（背景铺底 + 前景控件），支持 `bg` 背景色与整幅画布独立布局。
+- **多语言（i18n）**：`lang/{locale}.toml` 语言资源 + `--lang` 参数 > 窗口 `locale` > 系统语言 > 默认的优先级链；
+  `<select id="locale">` 运行时一键切换；安装后把所选语言写入应用配置 / 注册表，供安装产物联动。
+- **简单样式动画**：`animate` 属性声明式动画（fade-in / slide / spin / pulse / scale-in，可 `infinite` / `delay`），
+  纯渲染期时间插值、不侵入布局；进度条平滑过渡。
 - **固定画布布局引擎**：解析期即可确定每个控件的矩形，布局确定性、可单测；内容溢出有解析期告警。
 - **安装流程引擎**：清单（TOML）驱动 → 动作集（复制 / 写文件 / 快捷方式 / 注册表 / 运行进程）→
   后台线程执行 → 进度上报 → **失败 / 取消逆序回滚** → 全程 install.log。

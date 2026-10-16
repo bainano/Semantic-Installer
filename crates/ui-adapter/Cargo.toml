@@ -15,3 +15,6 @@ flow-engine.workspace = true
 eframe.workspace = true
 rfd.workspace = true
 image.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+winreg.workspace = true

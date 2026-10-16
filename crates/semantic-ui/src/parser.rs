@@ -10,8 +10,8 @@ pub const ROOT_TAG: &str = "window";
 
 /// 引擎内置的语义标签字典。
 pub const KNOWN_TAGS: &[&str] = &[
-    "window", "page", "row", "column", "text", "button", "input", "checkbox", "radio", "select",
-    "progress", "image", "link", "divider", "spacer", "label",
+    "window", "page", "layer", "row", "column", "text", "button", "input", "checkbox", "radio",
+    "select", "progress", "image", "link", "divider", "spacer", "label",
 ];
 
 #[derive(Debug, Clone, PartialEq)]

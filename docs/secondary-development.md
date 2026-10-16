@@ -20,7 +20,10 @@ Remove-Item resources\banner.png, resources\files\*
 
 - `<window width height theme>` 声明**固定画布尺寸**（运行时不可变）；
 - `<page id>` 与清单 `[steps].pages` 一一对应；
-- 前进按钮的自动禁用由 `required` 属性驱动。
+- 前进按钮的自动禁用由 `required` 属性驱动；
+- 复杂视觉可直接使用**图层**：`<page>` 下并列多个 `<layer>`（z 序叠加，见 markup-reference §3）；
+- 界面文字可用 **i18n**：`i18n="键"` 属性 + `lang/zh-CN.toml` 资源，运行时可切换（见 markup-reference §5）；
+- 需要动效时给任意节点加 `animate="fade-in 400ms"` 等样式动画（见 markup-reference §6）。
 
 ## 3. 修改安装清单（install.toml）
 
@@ -93,6 +96,8 @@ remove_registry = true
 myapp/
 ├── app.ui                 # 界面（唯一）
 ├── install.toml           # 清单
+├── lang/                  # 多语言资源（可选）：zh-CN.toml / en-US.toml …
+│   └── zh-CN.toml         #   i18n 键 → 文本（未命中回退标记默认文本）
 ├── resources/
 │   ├── banner.png         # 欢迎页侧图（可选）
 │   └── files/             # 安装负载（被复制到 $INSTALL_DIR）
@@ -117,6 +122,7 @@ cd myapp
 | `--markup <path>` | 界面标记（默认 `app.ui`） |
 | `--theme light\|dark` | 覆盖主题 |
 | `--uninstaller <path>` | 待复制进安装目录的卸载器（配合 `copy_uninstaller=true`） |
+| `--lang <locale>` | 覆盖界面语言（如 `zh-CN` / `en-US`；缺省按 参数 > 窗口 `locale` > 系统语言 > `zh-CN`） |
 | `--record <uninstall.json>` | 以卸载模式运行（等价于 `--mode uninstall`） |
 | `--dry-run install\|uninstall` | 无 GUI 全流程模拟（CI 用） |
 | `--log <path>` | 日志文件 |

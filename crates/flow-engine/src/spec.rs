@@ -55,6 +55,9 @@ pub struct FlowSpec {
     pub install: Option<InstallSpec>,
     #[serde(default)]
     pub uninstall: Option<UninstallSpec>,
+    /// 多语言联动：安装时把所选语言写入应用配置 / 注册表（被安装程序启动时读取）。
+    #[serde(default)]
+    pub locale: Option<LocaleSpec>,
 }
 
 impl FlowSpec {
@@ -156,6 +159,17 @@ pub struct UninstallSpec {
     pub remove_shortcuts: bool,
     #[serde(default)]
     pub remove_registry: bool,
+}
+
+/// 多语言联动配置：安装时把所选语言写入以下位置之一（可同时配置）。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct LocaleSpec {
+    /// 相对安装目录的配置文件路径模板（如 `config/locale`），内容 = 语言代码。
+    #[serde(default)]
+    pub write_file: Option<String>,
+    /// 注册表路径（如 `HKCU\\Software\\Demo App`），值名固定为 `Locale`。
+    #[serde(default)]
+    pub write_registry: Option<String>,
 }
 
 #[cfg(test)]

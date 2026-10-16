@@ -20,6 +20,9 @@ pub struct InstallRecord {
     pub uninstall_key: bool,
     pub uninstall: UninstallSpec,
     pub uninstaller_path: Option<String>,
+    /// 安装时选择的语言（来自 id="locale" 控件），供联动与后续查询。
+    #[serde(default)]
+    pub locale: Option<String>,
     /// 完整清单（供卸载器重建流程与窗口配置）。
     pub flow: crate::spec::FlowSpec,
 }
@@ -123,6 +126,7 @@ mod tests {
             uninstall_key: false,
             uninstall: UninstallSpec::default(),
             uninstaller_path: None,
+            locale: Some("zh-CN".into()),
             flow: FlowSpec::default(),
         };
         let json = serde_json::to_string(&record).unwrap();

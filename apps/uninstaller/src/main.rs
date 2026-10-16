@@ -3,7 +3,9 @@
 //! 用法：
 //! ```text
 //! uninstaller [--record uninstall.json] [--app-id com.example.demo]
-//!             [--markup uninstall.ui] [--theme light|dark] [--dry-run] [--log PATH]
+//!             [--markup uninstall.ui] [--theme light|dark]
+//!             [--lang zh-CN|en-US]     # 覆盖语言；缺省跟随安装记录中的语言
+//!             [--dry-run] [--log PATH]
 //! ```
 //!
 //! 查找顺序：显式 --record → 本程序同目录 uninstall.json → 用户级副本。
@@ -15,36 +17,37 @@ use flow_engine::{dry_run_uninstall, find_record, InstallRecord};
 use semantic_ui::parse;
 use ui_adapter::{ErrorApp, InstallerApp, Mode, ShellOptions};
 
-/// 内置默认卸载界面（确认 → 进度 → 完成），支持 --markup 覆盖。
+/// 内置默认卸载界面（确认 → 进度 → 完成），支持 --markup 覆盖；
+/// 文本带 i18n 键：语言资源位于 exe 同目录 lang/（如 lang/en-US.toml），缺失时回退默认中文。
 const DEFAULT_MARKUP: &str = r##"<window title="卸载程序" width="720" height="460" theme="light">
   <page id="confirm" title="确认卸载">
     <column padding="36" gap="14">
-      <text size="24" weight="bold">卸载确认</text>
-      <text color="#666">卸载将删除以下内容，且无法恢复：</text>
-      <text id="summary" color="#333" size="14">- 安装目录中的全部程序文件
+      <text size="24" weight="bold" i18n="uninstall.title">卸载确认</text>
+      <text color="#666" i18n="uninstall.hint">卸载将删除以下内容，且无法恢复：</text>
+      <text id="summary" color="#333" size="14" i18n="uninstall.summary">- 安装目录中的全部程序文件
 - 开始菜单 / 桌面快捷方式
 - 注册表卸载登记（Windows）
 - 用户数据（由清单 keep_user_data 保护）</text>
       <spacer/>
       <row gap="8" align="end">
-        <button action="uninstall" primary="true">卸载</button>
-        <button action="cancel">取消</button>
+        <button action="uninstall" primary="true" i18n="uninstall.do">卸载</button>
+        <button action="cancel" i18n="uninstall.cancel">取消</button>
       </row>
     </column>
   </page>
   <page id="progress" title="正在卸载">
     <column padding="36" gap="14">
-      <text size="24" weight="bold">正在卸载…</text>
+      <text size="24" weight="bold" i18n="uninstall.progress">正在卸载…</text>
       <progress id="progress"/>
     </column>
   </page>
   <page id="finish" title="卸载完成">
     <column padding="36" gap="14">
-      <text size="24" weight="bold">卸载完成</text>
-      <text color="#666">感谢使用，再见。</text>
+      <text size="24" weight="bold" i18n="uninstall.done">卸载完成</text>
+      <text color="#666" i18n="uninstall.bye">感谢使用，再见。</text>
       <spacer/>
       <row gap="8" align="end">
-        <button action="finish" primary="true">完成</button>
+        <button action="finish" primary="true" i18n="uninstall.finish">完成</button>
       </row>
     </column>
   </page>
@@ -55,6 +58,7 @@ struct Args {
     app_id: Option<String>,
     markup: Option<PathBuf>,
     theme: Option<String>,
+    lang: Option<String>,
     dry_run: bool,
     log: Option<PathBuf>,
 }
@@ -65,6 +69,7 @@ fn parse_args() -> Args {
         app_id: None,
         markup: None,
         theme: None,
+        lang: None,
         dry_run: false,
         log: None,
     };
@@ -84,11 +89,14 @@ fn parse_args() -> Args {
             "--app-id" => args.app_id = Some(val("--app-id")),
             "--markup" => args.markup = Some(PathBuf::from(val("--markup"))),
             "--theme" => args.theme = Some(val("--theme")),
+            "--lang" => args.lang = Some(val("--lang")),
             "--dry-run" => args.dry_run = true,
             "--log" => args.log = Some(PathBuf::from(val("--log"))),
             "--help" | "-h" => {
                 println!(
-                    "用法：uninstaller [--record uninstall.json] [--app-id ID] [--markup uninstall.ui] [--theme light|dark] [--dry-run] [--log PATH]"
+                    "用法：uninstaller [--record uninstall.json] [--app-id ID]\n  \
+                     [--markup uninstall.ui] [--theme light|dark] [--lang zh-CN|en-US]\n  \
+                     [--dry-run] [--log PATH]"
                 );
                 std::process::exit(0);
             }
@@ -160,8 +168,10 @@ fn main() -> ExitCode {
         }
     };
 
-    // 卸载器复用安装器壳：模式 = Uninstall，清单 = 记录中携带的 FlowSpec
+    // 卸载器复用安装器壳：模式 = Uninstall，清单 = 记录中携带的 FlowSpec；
+    // 语言联动：--lang > 安装记录中的语言 > 系统探测 > 默认 zh-CN（壳内兜底）
     let flow = record.flow.clone();
+    let record_locale = record.locale.clone();
     let (w, h) = ui_adapter::window_size_of(&flow, &parsed.root);
     let opts = ShellOptions {
         mode: Mode::Uninstall,
@@ -171,6 +181,7 @@ fn main() -> ExitCode {
         theme_override: args.theme.clone(),
         uninstaller_path: None,
         record: Some(record),
+        lang: args.lang.clone().or(record_locale),
     };
     let app = InstallerApp::new(opts);
 

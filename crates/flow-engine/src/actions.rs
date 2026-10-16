@@ -21,6 +21,8 @@ pub struct InstallInputs {
     pub create_shortcut: bool,
     /// 与安装器同目录的卸载器路径（copy_uninstaller 时使用）。
     pub uninstaller_path: Option<PathBuf>,
+    /// 用户选择的语言（id="locale" 控件），联动写入应用配置 / 注册表。
+    pub locale: Option<String>,
 }
 
 /// 单个可执行动作。
@@ -203,6 +205,26 @@ pub fn build_install_actions(
         append_run(&mut actions, run, &ctx)?;
     }
 
+    // 多语言联动：把所选语言写入应用配置 / 注册表（被安装程序启动时读取）
+    if let Some(locale) = &inputs.locale
+        && let Some(loc) = spec.locale.as_ref()
+    {
+        if let Some(f) = &loc.write_file {
+            let path = install_dir.join(resolve_template(f, &ctx)?);
+            actions.push(Action::WriteFile {
+                path,
+                content: locale.clone(),
+            });
+        }
+        if let Some(r) = &loc.write_registry {
+            actions.push(Action::RegWrite {
+                path: r.clone(),
+                name: "Locale".to_owned(),
+                value: locale.clone(),
+            });
+        }
+    }
+
     Ok((actions, install_dir))
 }
 
@@ -290,6 +312,7 @@ pub fn record_from_report(
     uninstall_spec: &UninstallSpec,
     created: &[crate::executor::Created],
     uninstaller_path: Option<&Path>,
+    locale: Option<String>,
 ) -> crate::manifest::InstallRecord {
     use crate::executor::Created;
     use crate::manifest::InstallRecord;
@@ -353,6 +376,7 @@ pub fn record_from_report(
         uninstall: uninstall_spec.clone(),
         uninstaller_path: uninstaller_path.map(|p| p.to_string_lossy().into_owned()),
         flow: spec.clone(),
+        locale,
     }
 }
 
@@ -432,5 +456,47 @@ install_dir = "$INSTALL_DIR/sub"
         let spec = FlowSpec::from_toml_str(spec_src).unwrap();
         let err = build_install_actions(&spec, Path::new("."), &InstallInputs::default()).unwrap_err();
         assert!(err.contains("自身"));
+    }
+
+    #[test]
+    fn locale_linkage_appends_write_actions() {
+        let spec_src = r#"
+[app]
+name = "X"
+id = "x"
+version = "1"
+[install]
+install_dir = "$HOME/x"
+[locale]
+write_file = "config/locale"
+write_registry = "HKCU\\Software\\X"
+"#;
+        let spec = FlowSpec::from_toml_str(spec_src).unwrap();
+        let root = Path::new("C:/fake-root");
+        let inputs = InstallInputs {
+            locale: Some("en-US".into()),
+            ..Default::default()
+        };
+        let (actions, _) = build_install_actions(&spec, root, &inputs).unwrap();
+        assert_eq!(actions.len(), 2, "WriteFile + RegWrite 两个联动动作");
+        match &actions[0] {
+            Action::WriteFile { path, content } => {
+                assert!(path.to_string_lossy().ends_with("config/locale"));
+                assert_eq!(content, "en-US");
+            }
+            other => panic!("期望 WriteFile，得到 {other:?}"),
+        }
+        match &actions[1] {
+            Action::RegWrite { path, name, value } => {
+                assert_eq!(path, "HKCU\\Software\\X");
+                assert_eq!(name, "Locale");
+                assert_eq!(value, "en-US");
+            }
+            other => panic!("期望 RegWrite，得到 {other:?}"),
+        }
+
+        // 未选语言 → 不追加联动动作
+        let (actions, _) = build_install_actions(&spec, root, &InstallInputs::default()).unwrap();
+        assert!(actions.is_empty());
     }
 }

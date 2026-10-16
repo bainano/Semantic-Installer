@@ -10,9 +10,10 @@
 | `title` | — | 窗口标题 |
 | `width` / `height` | 800 / 600 | **固定画布尺寸**（运行时不可缩放、不可最大化） |
 | `theme` | `light` | `light` / `dark` |
+| `locale` | 系统探测 | 界面语言代码（如 `zh-CN`；缺省时：`--lang` 参数 > 此属性 > 系统语言 > `zh-CN`） |
 
 ```xml
-<window title="我的安装程序" width="900" height="620" theme="light">
+<window title="我的安装程序" width="900" height="620" theme="light" locale="zh-CN">
   <!-- 页面定义 -->
 </window>
 ```
@@ -30,7 +31,44 @@
 </page>
 ```
 
-## 3. 布局容器 `<row>` / `<column>`
+## 3. 图层 `<layer>`（Phase 9）
+
+`<layer>` 是 `<page>` 的直接子容器：多个图层在**同一固定画布**上按声明顺序（即 z 序）叠加，
+每层独立布局、默认透明背景。用于「背景铺底 + 前景文字/控件」等场景，且不破坏固定画布约束。
+
+| 属性 | 说明 |
+| --- | --- |
+| `id` | 图层标识 |
+| `bg` | 图层背景色（`#rgb` / `#rrggbb`） |
+| `visible` | `true` / `false` 控制显隐（可与动画联动，默认 `true`） |
+
+规则与限制：
+- 声明顺序即 z 序：后声明的层绘制在上方；
+- 图层模式下，`<page>` 的**非 layer 直接子节点会被忽略并告警**（必须放进某个层）；
+- **不允许图层嵌套**：`<layer>` 内出现 `<layer>` 时按普通容器布局并告警；
+- 没有 `<layer>` 的页面保持传统单层布局（旧路径完全兼容）。
+
+```xml
+<page id="welcome" title="欢迎">
+  <layer id="bg" bg="#1f6feb">
+    <image src="resources/banner.png" width="260" height="620"/>
+  </layer>
+  <layer id="fg">
+    <row>
+      <spacer width="260"/>
+      <column gap="14" padding="40">
+        <text size="30" weight="bold">欢迎</text>
+        <spacer/>
+        <row gap="8" align="end">
+          <button action="next" primary="true">下一步</button>
+        </row>
+      </column>
+    </row>
+  </layer>
+</page>
+```
+
+## 4. 布局容器 `<row>` / `<column>`
 
 `row` 水平排列子项，`column` 垂直排列。子项尺寸规则：
 
@@ -51,7 +89,69 @@
 </row>
 ```
 
-## 4. 组件标签
+## 5. 多语言 i18n（Phase 10）
+
+语言资源为 `lang/{locale}.toml`（与 `.ui` 同目录），键与节点 `i18n` 属性对应：
+
+```toml
+# lang/zh-CN.toml
+welcome.title = "欢迎"
+button.next = "下一步"
+```
+
+- 任意带文本的节点（`text / label / button / link / checkbox / radio`）可写
+  `i18n="键"`，资源命中时**布局与渲染**都使用资源文本；未命中时回退节点默认文本；
+- 资源支持扁平键（`"welcome.title" = "…"`）与嵌套节（`[welcome] title = "…"`），统一归一为点分键；
+- **语言优先级链**：`--lang` 参数 > `<window locale>` > 系统语言（Windows 注册表） > 默认 `zh-CN`；
+- **运行时切换**：`<select id="locale" options="zh-CN,en-US"/>`（引擎约定键），切换即全界面重渲染；
+- **安装后联动**：清单 `[locale]` 段把所选语言写入应用配置 / 注册表，
+  被安装程序启动时读取即可跟随语言；卸载器自动读取安装记录中的语言显示同语言界面。
+
+```xml
+<text i18n="welcome.title">欢迎</text>                       <!-- 回退默认文本 -->
+<select id="locale" options="zh-CN,en-US"/>
+```
+
+```toml
+# install.toml：联动写入安装目录 config/locale 文件 + 注册表值 Locale
+[locale]
+write_file = "config/locale"
+write_registry = "HKCU\\Software\\Demo App"
+```
+
+## 6. 简单样式动画（Phase 11）
+
+`animate` 属性声明样式动画（渲染期时间插值，不侵入布局引擎）：
+
+```text
+animate = "<kind> [<duration>ms] [infinite] [delay <n>ms]"
+kind    = fade-in | slide-up | slide-down | slide-left | slide-right | spin | pulse | scale-in
+```
+
+| 种类 | 效果 | 缺省时长 |
+| --- | --- | --- |
+| `fade-in` | 透明度 0 → 1 | 300ms |
+| `slide-up / -down / -left / -right` | 24px 位移 + 淡入 | 300ms |
+| `spin` | 绕中心顺时针旋转一周 | 1200ms |
+| `pulse` | 透明度呼吸脉冲（0.55 ↔ 1） | 800ms |
+| `scale-in` | 0.8 倍缩放至原尺寸 + 淡入 | 300ms |
+
+- 一次性动画在页面进入时播放（每次进入页面重新播放）；`infinite` 循环播放；
+- 动画为**纯时间函数**：播放中每帧重绘，结束后恢复原布局矩形；
+- 适用范围：fade / slide / pulse 对全部节点生效；
+  **spin / scale-in 仅对带形状的节点生效**（容器背景、按钮、图片、进度条、分隔线），
+  纯文本与 egui 原生控件（input / checkbox / select）不旋转缩放；
+- 进度条本身已内置平滑插值（约 120ms 指数趋近），进度变化不跳变。
+
+```xml
+<text animate="fade-in 400ms">标题</text>
+<text animate="slide-up 500ms">正文</text>
+<row animate="fade-in 700ms">…</row>
+<text animate="pulse 1500ms infinite">请勿关闭窗口</text>
+<row animate="scale-in 300ms"><button action="finish">完成</button></row>
+```
+
+## 7. 组件标签
 
 ### `<text>` / `<label>`
 
@@ -136,79 +236,83 @@
 | --- | --- |
 | `<link url="…">文本</link>` | 超链接（默认浏览器打开；`action` / `goto` 亦可） |
 | `<divider/>` | 分隔线 |
-| `<spacer/>` | 弹性占位（占据剩余空间，与 `weight` 协同） |
+| `<spacer/>` | 弹性占位（占据剩余空间，与 `weight` 协同；可声明 `width`/`height` 固定尺寸占用固定间隙） |
 | `<label>` | 次要文本 |
 
-## 5. 完整示例（installer）
+## 8. 完整示例（installer）
 
 ```xml
 <window title="Demo 安装程序" width="900" height="620" theme="light">
   <page id="welcome" title="欢迎">
-    <row>
-      <column width="260" bg="#1f6feb">
-        <image src="resources/banner.png" width="260" height="620"/>
-      </column>
-      <column gap="14" padding="44">
-        <text size="30" weight="bold">Demo 安装程序</text>
-        <spacer/>
-        <text size="15">欢迎使用 Demo。点击“下一步”继续安装。</text>
-        <spacer/>
-        <row gap="8" align="end">
-          <button action="next" primary="true">下一步</button>
-          <button action="cancel">取消</button>
-        </row>
-      </column>
-    </row>
+    <layer id="bg" bg="#1f6feb">
+      <image src="resources/banner.png" width="260" height="620"/>
+    </layer>
+    <layer id="fg">
+      <row>
+        <spacer width="260"/>
+        <column gap="14" padding="40">
+          <text size="30" weight="bold" i18n="welcome.title" animate="fade-in 400ms">Demo 安装程序</text>
+          <spacer/>
+          <text size="15" i18n="welcome.body" animate="slide-up 500ms">欢迎使用 Demo。点击“下一步”继续安装。</text>
+          <spacer/>
+          <row gap="8" align="end" animate="fade-in 700ms">
+            <button action="next" primary="true" i18n="button.next">下一步</button>
+            <button action="cancel" i18n="button.cancel">取消</button>
+          </row>
+        </column>
+      </row>
+    </layer>
   </page>
 
   <page id="license" title="许可协议">
     <column gap="12" padding="44">
-      <text size="24" weight="bold">最终用户许可协议</text>
+      <text size="24" weight="bold" i18n="license.title">最终用户许可协议</text>
       <divider/>
       <text size="14" color="#444">MIT License…</text>
       <spacer/>
-      <checkbox id="accept-license" required="true">我已阅读并同意</checkbox>
+      <checkbox id="accept-license" required="true" i18n="license.accept">我已阅读并同意</checkbox>
       <row gap="8" align="end">
-        <button action="back">上一步</button>
-        <button action="next" primary="true">我同意，继续</button>
+        <button action="back" i18n="button.back">上一步</button>
+        <button action="next" primary="true" i18n="button.agree">我同意，继续</button>
       </row>
     </column>
   </page>
 
   <page id="options" title="安装选项">
     <column gap="14" padding="44">
-      <text size="24" weight="bold">安装选项</text>
+      <text size="24" weight="bold" i18n="options.title">安装选项</text>
       <input id="install-dir" placeholder="$LOCALAPPDATA/Demo App" browse="true"/>
-      <checkbox id="create-shortcut" checked="true">创建桌面快捷方式</checkbox>
+      <checkbox id="create-shortcut" checked="true" i18n="options.shortcut">创建桌面快捷方式</checkbox>
+      <select id="locale" options="zh-CN,en-US"/>
       <spacer/>
       <row gap="8" align="end">
-        <button action="back">上一步</button>
-        <button action="install" primary="true">安装</button>
-        <button action="cancel">取消</button>
+        <button action="back" i18n="button.back">上一步</button>
+        <button action="install" primary="true" i18n="button.install">安装</button>
+        <button action="cancel" i18n="button.cancel">取消</button>
       </row>
     </column>
   </page>
 
   <page id="progress" title="正在安装">
     <column gap="16" padding="44">
-      <text size="24" weight="bold">正在安装…</text>
+      <text size="24" weight="bold" i18n="progress.title">正在安装…</text>
       <progress id="progress"/>
     </column>
   </page>
 
   <page id="finish" title="安装完成">
     <column gap="14" padding="44">
-      <text size="24" weight="bold">安装完成</text>
+      <text size="24" weight="bold" i18n="finish.title" animate="fade-in 300ms">安装完成</text>
       <spacer/>
-      <row gap="8" align="end">
-        <button action="finish" primary="true">完成</button>
+      <row gap="8" align="end" animate="scale-in 300ms">
+        <button action="finish" primary="true" i18n="button.finish">完成</button>
       </row>
     </column>
   </page>
 </window>
 ```
 
-## 6. 引擎与标记的约定键
+## 9. 引擎与标记的约定键
 
 | 约定 | 说明 |
 | --- | --- |
@@ -216,4 +320,6 @@
 | `<input id="install-dir">` | 用户输入的安装目录覆盖清单默认值 |
 | `<checkbox id="create-shortcut">` | 控制快捷方式创建 |
 | `<progress id="progress">` | 进度条填充与文案由引擎绑定 |
+| `<select id="locale">` | 界面语言切换（引擎约定键；值如 `zh-CN`、`en-US`） |
+| `lang/{locale}.toml` | i18n 资源（与 `.ui` 同目录） |
 | 固定画布 | 内容必须适配画布尺寸；超出会触发解析期告警（不做滚动 / 自适应） |

@@ -7,14 +7,18 @@
 //! - [`widget`]：语义组件模型与运行时 UI 状态；
 //! - [`theme`]：颜色 / 字号等设计令牌。
 
+pub mod animation;
 pub mod ast;
+pub mod i18n;
 pub mod layout;
 pub mod lexer;
 pub mod parser;
 pub mod theme;
 pub mod widget;
 
+pub use animation::{parse_animate, AnimationKind, AnimationSpec};
 pub use ast::{Attribute, Node, Span};
+pub use i18n::{resolve as resolve_i18n, I18n};
 pub use layout::{Align, FontWeight, Measurer, PageModel, Rect, Size};
 pub use lexer::{tokenize, LexError, Token, TokenKind};
 pub use parser::{parse, ParseError, ParseResult};

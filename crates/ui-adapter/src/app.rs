@@ -1,4 +1,4 @@
-//! 应用壳：固定尺寸窗口 + 页面导航 + 安装 / 卸载流程编排。
+﻿//! 应用壳：固定尺寸窗口 + 页面导航 + 安装 / 卸载流程编排。
 //!
 //! 固定尺寸约束：窗口尺寸仅来自清单 / 标记配置，运行时禁缩放、禁最大化；
 //! 布局引擎按固定画布确定性计算，引擎不做自适应（产品化取舍，见 docs）。
@@ -19,6 +19,7 @@ use semantic_ui::{FontWeight, Theme};
 use crate::assets::AssetCache;
 use crate::events;
 use crate::{fonts, render, theme};
+use semantic_ui::i18n::I18n;
 
 /// 运行模式：安装器 / 卸载器（统一底层架构）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,6 +37,8 @@ pub struct ShellOptions {
     pub theme_override: Option<String>,
     pub uninstaller_path: Option<PathBuf>,
     pub record: Option<flow_engine::InstallRecord>,
+    /// 语言覆盖（--lang），优先级最高。
+    pub lang: Option<String>,
 }
 
 /// 从清单 / 标记解析固定窗口尺寸。
@@ -101,6 +104,28 @@ pub struct InstallerApp {
     pub(crate) ready: bool,
     pub(crate) window: (f32, f32),
     pub(crate) install_dir: Option<PathBuf>,
+    pub(crate) locale: String,
+    pub(crate) i18n: I18n,
+    /// 页面进入时刻（egui 全局时间秒），动画时间基准。
+    page_entered_at: f64,
+    /// 上一帧渲染的页面序号（检测页面切换以重置动画基准）。
+    last_page_index: usize,
+}
+
+/// 系统语言探测（Windows：注册表 `LocaleName`，如 "zh-CN"；其他平台回退 None）。
+#[cfg(windows)]
+fn detect_system_locale() -> Option<String> {
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let key = hkcu.open_subkey(r"Control Panel\International").ok()?;
+    let v: String = key.get_value("LocaleName").ok()?;
+    (!v.is_empty()).then_some(v)
+}
+
+#[cfg(not(windows))]
+fn detect_system_locale() -> Option<String> {
+    None
 }
 
 impl InstallerApp {
@@ -148,6 +173,18 @@ impl InstallerApp {
             }
         }
 
+        // root_dir 需在 opts 移入结构体前取出（语言资源与图标加载基准）
+        let root_dir = opts.root_dir.clone();
+
+        // 语言：--lang 参数 > <window locale> > 系统语言 > 默认 zh-CN
+        let locale = opts
+            .lang
+            .clone()
+            .or_else(|| opts.markup_root.attr("locale").map(str::to_owned))
+            .or_else(detect_system_locale)
+            .unwrap_or_else(|| "zh-CN".to_owned());
+        let i18n = I18n::load(&root_dir, &locale);
+
         Self {
             opts,
             pages: HashMap::new(),
@@ -162,6 +199,10 @@ impl InstallerApp {
             ready: false,
             window,
             install_dir: None,
+            locale,
+            i18n,
+            page_entered_at: 0.0,
+            last_page_index: 0,
         }
     }
 
@@ -170,7 +211,13 @@ impl InstallerApp {
         let canvas = Rect::new(0.0, 0.0, self.window.0, self.window.1);
         let measurer = CtxMeasurer { ctx };
         let mut any_error = false;
-        for page in self.opts.markup_root.children_of("page") {
+        // 先按当前语言解析标记文本（i18n 键 → 资源文本），再布局
+        for i in 0..self.opts.markup_root.children.len() {
+            if !self.opts.markup_root.children[i].is("page") {
+                continue;
+            }
+            let page = &mut self.opts.markup_root.children[i];
+            semantic_ui::resolve_i18n(page, &self.i18n);
             let id = page.attr("id").unwrap_or_default().to_owned();
             match layout_page(page, canvas, &self.theme, &measurer) {
                 Ok(model) => {
@@ -232,6 +279,7 @@ impl InstallerApp {
             install_dir_override: (!override_dir.is_empty()).then_some(override_dir),
             create_shortcut: self.state.checked("create-shortcut"),
             uninstaller_path: self.opts.uninstaller_path.clone(),
+            locale: Some(self.locale.clone()),
         };
         match flow_engine::build_install_actions(&self.opts.flow, &root, &inputs) {
             Ok((actions, install_dir)) => {
@@ -332,6 +380,7 @@ impl InstallerApp {
                     &uninstall_spec,
                     &report.created,
                     uninstaller_installed.as_deref(),
+                    Some(self.locale.clone()),
                 );
                 if let Err(e) = flow_engine::write_record(&record, &dir, &flow.app.id) {
                     log::error!("写入安装记录失败：{e}");
@@ -411,6 +460,15 @@ impl eframe::App for InstallerApp {
 
         self.poll_worker(&ctx);
 
+        // 运行时语言切换：id="locale" 控件变更 → 重载资源并置未就绪（下帧重布局）
+        if let Some(sel) = self.state.selected("locale").map(str::to_owned)
+            && sel != self.locale {
+                self.locale = sel;
+                self.i18n = I18n::load(&self.opts.root_dir, &self.locale);
+                self.pages.clear();
+                self.ready = false;
+            }
+
         let Some(page_id) = self.order.get(self.current).cloned() else {
             ui.label(format!("当前页面不可用（第 {} 页）", self.current + 1));
             return;
@@ -419,6 +477,14 @@ impl eframe::App for InstallerApp {
             ui.label(format!("页面 {page_id} 未定义，请检查标记配置。"));
             return;
         };
+
+        // 动画时间基准：页面切换后重置（每次进入页面动画重放）
+        let now = ctx.input(|i| i.time);
+        if self.current != self.last_page_index {
+            self.last_page_index = self.current;
+            self.page_entered_at = now;
+        }
+        let anim_t = now - self.page_entered_at;
 
         let mut clicks: Vec<Click> = Vec::new();
         render::render_page(
@@ -430,6 +496,7 @@ impl eframe::App for InstallerApp {
             &self.theme,
             &mut self.assets,
             &self.opts.root_dir,
+            anim_t,
             &mut |c| clicks.push(c),
         );
         for click in clicks {

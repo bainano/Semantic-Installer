@@ -3,10 +3,14 @@
 //! 布局矩形由固定画布布局引擎预先算好（`PageModel`），渲染阶段只做：
 //! 画布定位、控件绘制、交互响应与事件收集。图标一律使用矢量绘制（Painter），
 //! 不使用 emoji / 表情字符。
+//! 动画为渲染期纯时间函数：fade / slide / pulse 对全部节点生效（透明度 / 位移），
+//! spin / scale-in 对带形状的节点（容器背景、按钮、图片、进度条、分隔线）生效，
+//! 纯文本与 egui 原生控件（input / checkbox / select）不旋转缩放。
 
 use std::path::Path;
 
 use eframe::egui;
+use semantic_ui::animation::{parse_animate, AnimationKind, AnimationSpec};
 use semantic_ui::ast::Node;
 use semantic_ui::layout::{PageModel, Rect};
 use semantic_ui::widget::{Click, UiState};
@@ -16,7 +20,106 @@ use crate::app::{phase_failed, phase_working, Phase};
 use crate::assets::AssetCache;
 use crate::theme::{self, color};
 
+/// 节点动画的当前插值状态。
+#[derive(Debug, Clone, Copy)]
+struct AnimState {
+    opacity: f32,
+    offset: egui::Vec2,
+    angle: f32,
+    scale: f32,
+}
+
+fn ease_out(k: f64) -> f64 {
+    1.0 - (1.0 - k) * (1.0 - k)
+}
+
+/// 按"页面进入后的秒数"计算节点动画状态；动画未开始 / 已结束返回 None（保持原样）。
+fn compute_anim(spec: &AnimationSpec, since_s: f64) -> Option<AnimState> {
+    let t_ms = since_s * 1000.0 - spec.delay_ms as f64;
+    if t_ms < 0.0 {
+        return None;
+    }
+    let dur = spec.duration_ms.max(1) as f64;
+    let k = if spec.infinite {
+        (t_ms % dur) / dur
+    } else {
+        (t_ms / dur).min(1.0)
+    };
+    if !spec.infinite && t_ms >= dur {
+        return None;
+    }
+    let mut st = AnimState {
+        opacity: 1.0,
+        offset: egui::Vec2::ZERO,
+        angle: 0.0,
+        scale: 1.0,
+    };
+    let kk = ease_out(k);
+    match spec.kind {
+        AnimationKind::FadeIn => st.opacity = kk as f32,
+        AnimationKind::SlideUp => {
+            st.offset = egui::vec2(0.0, 24.0 * (1.0 - kk) as f32);
+            st.opacity = kk as f32;
+        }
+        AnimationKind::SlideDown => {
+            st.offset = egui::vec2(0.0, -24.0 * (1.0 - kk) as f32);
+            st.opacity = kk as f32;
+        }
+        AnimationKind::SlideLeft => {
+            st.offset = egui::vec2(24.0 * (1.0 - kk) as f32, 0.0);
+            st.opacity = kk as f32;
+        }
+        AnimationKind::SlideRight => {
+            st.offset = egui::vec2(-24.0 * (1.0 - kk) as f32, 0.0);
+            st.opacity = kk as f32;
+        }
+        AnimationKind::Pulse => {
+            let phase = k * std::f64::consts::TAU;
+            st.opacity = (0.55 + 0.45 * ((phase.sin() + 1.0) / 2.0)) as f32;
+        }
+        AnimationKind::Spin => st.angle = (k * std::f64::consts::TAU) as f32,
+        AnimationKind::ScaleIn => {
+            st.scale = (0.8 + 0.2 * kk) as f32;
+            st.opacity = kk as f32;
+        }
+    }
+    Some(st)
+}
+
+/// 绘制矩形（支持旋转角；angle=0 时等价于普通填充）。
+fn fill_rect(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    radius: egui::CornerRadius,
+    fill: egui::Color32,
+    angle: f32,
+) {
+    if angle != 0.0 {
+        let s = egui::epaint::RectShape::filled(rect, radius, fill).with_angle(angle);
+        painter.add(egui::Shape::Rect(s));
+    } else {
+        painter.rect_filled(rect, radius, fill);
+    }
+}
+
+fn stroke_rect(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    radius: egui::CornerRadius,
+    stroke: egui::Stroke,
+    angle: f32,
+) {
+    if angle != 0.0 {
+        let s = egui::epaint::RectShape::stroke(rect, radius, stroke, egui::StrokeKind::Inside)
+            .with_angle(angle);
+        painter.add(egui::Shape::Rect(s));
+    } else {
+        painter.rect_stroke(rect, radius, stroke, egui::StrokeKind::Inside);
+    }
+}
+
 /// 渲染当前页面并收集点击事件（Ui 中心化：直接绘制在给定 Ui 上）。
+/// `anim_t` 为页面进入后的秒数（动画时间基准）。
 /// 参数为渲染管线的显式依赖（状态、主题、进度、资源、事件出口），保持扁平可读。
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn render_page(
@@ -28,6 +131,7 @@ pub(crate) fn render_page(
     theme: &Theme,
     assets: &mut AssetCache,
     root: &Path,
+    anim_t: f64,
     emit: &mut dyn FnMut(Click),
 ) {
     // 固定画布背景
@@ -36,11 +140,28 @@ pub(crate) fn render_page(
         .rect_filled(canvas, egui::CornerRadius::ZERO, color(theme.bg));
 
     let valid = semantic_ui::widget::page_valid(model, state);
-    for (i, node) in model.nodes.iter().enumerate() {
-        let rect = model.rects[i];
-        render_node(
-            ui, node, &rect, i, valid, state, phase, progress, theme, assets, root, emit,
-        );
+    if model.layers.is_empty() {
+        // 单层旧路径：页面扁平列表直接渲染
+        for (i, node) in model.nodes.iter().enumerate() {
+            let rect = model.rects[i];
+            render_node(
+                ui, node, &rect, i, valid, state, phase, progress, theme, assets, root, anim_t,
+                emit,
+            );
+        }
+    } else {
+        // 图层模式：按 z 序逐层渲染，层内节点全局唯一序号（跨层 Id 不冲突）
+        let mut global = 0usize;
+        for layer in &model.layers {
+            for (j, node) in layer.nodes.iter().enumerate() {
+                let rect = layer.rects[j];
+                render_node(
+                    ui, node, &rect, global, valid, state, phase, progress, theme, assets, root,
+                    anim_t, emit,
+                );
+                global += 1;
+            }
+        }
     }
     // 失败提示条（覆盖页面顶部）
     if let Some(msg) = phase_failed(phase) {
@@ -78,6 +199,7 @@ fn font_size(node: &Node, theme: &Theme) -> f32 {
 
 /// 渲染单个节点到给定矩形。参数为渲染管线的显式依赖，保持扁平可读。
 /// `index` 为节点在页面扁平列表中的序号，用于生成唯一交互 Id（同页多按钮不再冲突）。
+/// `anim_t` 为页面进入后的秒数，驱动样式动画的时间插值。
 #[allow(clippy::too_many_arguments)]
 fn render_node(
     ui: &mut egui::Ui,
@@ -91,16 +213,51 @@ fn render_node(
     theme: &Theme,
     assets: &mut AssetCache,
     root: &Path,
+    anim_t: f64,
     emit: &mut dyn FnMut(Click),
 ) {
     let r = rect_of(rect);
-    let painter = ui.painter();
     let id = node_id(node, index);
 
+    // ---- 动画状态：位移 / 透明度 / 旋转 / 缩放 ----
+    let anim = node
+        .attr("animate")
+        .and_then(parse_animate)
+        .and_then(|s| compute_anim(&s, anim_t));
+    let is_shape = matches!(
+        node.tag.as_str(),
+        "row" | "column" | "layer" | "page" | "button" | "image" | "divider" | "progress"
+    );
+    let (pr, painter, hit_r) = if let Some(a) = &anim {
+        if a.angle == 0.0 && a.scale == 1.0 && a.opacity >= 1.0 && a.offset == egui::Vec2::ZERO {
+            // 无实际变换（理论上不会出现），走原路径
+            (r, ui.painter().clone(), r)
+        } else {
+            let mut p = ui.painter().clone();
+            if a.opacity < 1.0 {
+                p.set_opacity(a.opacity);
+            }
+            let mut pr = r.translate(a.offset);
+            if a.scale != 1.0 {
+                pr = egui::Rect::from_center_size(pr.center(), pr.size() * a.scale);
+            }
+            // 动画进行中：请求持续重绘（一次性动画结束后 compute_anim 返回 None，自然停止）
+            ui.ctx().request_repaint();
+            (pr, p, pr)
+        }
+    } else {
+        (r, ui.painter().clone(), r)
+    };
+    let angle = anim
+        .as_ref()
+        .filter(|a| a.angle != 0.0 && is_shape)
+        .map(|a| a.angle)
+        .unwrap_or(0.0);
+
     match node.tag.as_str() {
-        "page" | "row" | "column" => {
+        "page" | "layer" | "row" | "column" => {
             if let Some(bg) = node.attr_color("bg") {
-                painter.rect_filled(r, egui::CornerRadius::ZERO, color(bg));
+                fill_rect(&painter, pr, egui::CornerRadius::ZERO, color(bg), angle);
             }
         }
         "text" | "label" => {
@@ -117,9 +274,9 @@ fn render_node(
                 _ => egui::Align2::LEFT_TOP,
             };
             let pos = match align {
-                egui::Align2::CENTER_TOP => r.center_top(),
-                egui::Align2::RIGHT_TOP => r.right_top(),
-                _ => r.left_top(),
+                egui::Align2::CENTER_TOP => pr.center_top(),
+                egui::Align2::RIGHT_TOP => pr.right_top(),
+                _ => pr.left_top(),
             };
             let mut font = egui::FontId::proportional(size);
             if weight == FontWeight::Bold {
@@ -130,7 +287,7 @@ fn render_node(
         "link" => {
             let c = color(theme.accent);
             let size = font_size(node, theme);
-            let pos = r.left_top();
+            let pos = pr.left_top();
             painter.text(
                 pos,
                 egui::Align2::LEFT_TOP,
@@ -143,10 +300,10 @@ fn render_node(
                 (g.size().x, g.size().y)
             });
             painter.line_segment(
-                [egui::pos2(r.min.x, r.bottom() - 2.0), egui::pos2(r.min.x + tw, r.bottom() - 2.0)],
+                [egui::pos2(pr.min.x, pr.bottom() - 2.0), egui::pos2(pr.min.x + tw, pr.bottom() - 2.0)],
                 egui::Stroke::new(1.0, c),
             );
-            let resp = ui.interact(r, egui::Id::new(id.clone()), egui::Sense::click());
+            let resp = ui.interact(hit_r, egui::Id::new(id.clone()), egui::Sense::click());
             if resp.clicked() {
                 emit(Click {
                     widget_id: id,
@@ -163,7 +320,7 @@ fn render_node(
                 Some("next") | Some("install") | Some("uninstall")
             );
             let disabled = (is_forward && !valid) || node.attr("enabled") == Some("false");
-            let hovered = ui.rect_contains_pointer(r);
+            let hovered = ui.rect_contains_pointer(hit_r);
             let active = ui.input(|i| i.pointer.any_pressed()) && hovered;
             let primary = node.flag("primary", false);
             let (fill, fg) = if disabled {
@@ -184,15 +341,16 @@ fn render_node(
                 (color(theme.panel), color(theme.text))
             };
             let radius = egui::CornerRadius::same(theme.radius.clamp(0.0, 24.0) as u8);
-            painter.rect_filled(r, radius, fill);
-            painter.rect_stroke(
-                r,
+            fill_rect(&painter, pr, radius, fill, angle);
+            stroke_rect(
+                &painter,
+                pr,
                 radius,
                 egui::Stroke::new(1.0, color(theme.border)),
-                egui::StrokeKind::Inside,
+                angle,
             );
             painter.text(
-                r.center(),
+                pr.center(),
                 egui::Align2::CENTER_CENTER,
                 node.text_of(""),
                 egui::FontId::proportional(font_size(node, theme)),
@@ -201,7 +359,7 @@ fn render_node(
             if disabled {
                 return;
             }
-            let resp = ui.interact(r, egui::Id::new(id.clone()), egui::Sense::click());
+            let resp = ui.interact(hit_r, egui::Id::new(id.clone()), egui::Sense::click());
             if resp.clicked() {
                 emit(Click {
                     widget_id: id,
@@ -214,7 +372,7 @@ fn render_node(
         "input" => {
             let browse = node.flag("browse", false);
             let browse_w = if browse { 64.0 } else { 0.0 };
-            let field_rect = egui::Rect::from_min_size(r.min, egui::vec2((r.width() - browse_w - 8.0).max(40.0), r.height()));
+            let field_rect = egui::Rect::from_min_size(hit_r.min, egui::vec2((hit_r.width() - browse_w - 8.0).max(40.0), hit_r.height()));
             let id_str = node.attr("id").unwrap_or_default().to_owned();
             let mut value = state.input(&id_str).to_owned();
             let placeholder = node.attr("placeholder").unwrap_or_default();
@@ -231,8 +389,8 @@ fn render_node(
             }
             if browse {
                 let btn_rect = egui::Rect::from_min_size(
-                    egui::pos2(r.right() - browse_w, r.top()),
-                    egui::vec2(browse_w, r.height()),
+                    egui::pos2(hit_r.right() - browse_w, hit_r.top()),
+                    egui::vec2(browse_w, hit_r.height()),
                 );
                 let br = ui.put(btn_rect, egui::Button::new("浏览…"));
                 if br.clicked()
@@ -245,7 +403,7 @@ fn render_node(
             let id_str = node.attr("id").unwrap_or_default().to_owned();
             let mut checked = state.checked(&id_str);
             let label = node.text_of("");
-            let resp = ui.put(r, egui::Checkbox::new(&mut checked, label));
+            let resp = ui.put(hit_r, egui::Checkbox::new(&mut checked, label));
             if resp.changed() {
                 state.set_checked(&id_str, checked);
             }
@@ -255,20 +413,20 @@ fn render_node(
             let value = node.attr("value").unwrap_or_default().to_owned();
             let selected = state.radio(&group) == Some(value.as_str());
             // 自绘单选：圆 + 标签
-            let center = egui::pos2(r.min.x + 9.0, r.center().y);
+            let center = egui::pos2(pr.min.x + 9.0, pr.center().y);
             painter.circle_filled(center, 8.0, color(theme.panel));
             painter.circle_stroke(center, 8.0, egui::Stroke::new(1.5, color(theme.border)));
             if selected {
                 painter.circle_filled(center, 4.0, color(theme.primary));
             }
             painter.text(
-                egui::pos2(r.min.x + 26.0, r.center().y),
+                egui::pos2(pr.min.x + 26.0, pr.center().y),
                 egui::Align2::LEFT_CENTER,
                 node.text_of(""),
                 egui::FontId::proportional(font_size(node, theme)),
                 color(theme.text),
             );
-            let resp = ui.interact(r, egui::Id::new(node_id(node, index)), egui::Sense::click());
+            let resp = ui.interact(hit_r, egui::Id::new(node_id(node, index)), egui::Sense::click());
             if resp.clicked() && !selected {
                 state.set_radio(group, value);
             }
@@ -290,10 +448,10 @@ fn render_node(
                 .or_else(|| options.first().cloned())
                 .unwrap_or_default();
             let mut changed = false;
-            ui.scope_builder(egui::UiBuilder::new().max_rect(r), |ui| {
+            ui.scope_builder(egui::UiBuilder::new().max_rect(hit_r), |ui| {
                 let combo = egui::ComboBox::from_id_salt(id_str.clone())
                     .selected_text(sel.clone())
-                    .width(r.width());
+                    .width(hit_r.width());
                 let resp = combo.show_ui(ui, |ui| {
                     for opt in &options {
                         ui.selectable_value(&mut sel, opt.clone(), opt.clone());
@@ -307,23 +465,29 @@ fn render_node(
         }
         "progress" => {
             let track = color(theme.border);
-            painter.rect_filled(r, egui::CornerRadius::same(4), track);
+            fill_rect(&painter, pr, egui::CornerRadius::same(4), track, angle);
             let working = phase_working(phase);
             let (done, total) = progress
                 .as_ref()
                 .map(|p| (p.done as f32, p.total as f32))
                 .unwrap_or((0.0, 1.0));
-            let frac = if working && total > 0.0 { (done / total).clamp(0.0, 1.0) } else { 0.0 };
+            let target = if working && total > 0.0 {
+                (done / total).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            // 进度平滑：朝目标值指数趋近（约 120ms 到达），避免跳变
+            let frac = smooth_progress(ui, &id, target);
             if frac > 0.0 {
-                let fill_w = r.width() * frac;
-                let fill_r = egui::Rect::from_min_size(r.min, egui::vec2(fill_w, r.height()));
-                painter.rect_filled(fill_r, egui::CornerRadius::same(4), color(theme.primary));
+                let fill_w = pr.width() * frac;
+                let fill_r = egui::Rect::from_min_size(pr.min, egui::vec2(fill_w, pr.height()));
+                fill_rect(&painter, fill_r, egui::CornerRadius::same(4), color(theme.primary), 0.0);
             }
             // 进度文案（引擎消息）
             if working
                 && let Some(p) = progress {
                     painter.text(
-                        egui::pos2(r.min.x, r.bottom() + 6.0),
+                        egui::pos2(pr.min.x, pr.bottom() + 6.0),
                         egui::Align2::LEFT_TOP,
                         format!("{}（{}/{}）", p.message, p.done, p.total),
                         egui::FontId::proportional(12.0),
@@ -335,11 +499,18 @@ fn render_node(
             if let Some(src) = node.attr("src")
                 && let Some(texture) = assets.get(ui.ctx(), src, root) {
                     let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
-                    painter.image(texture.id(), r, uv, egui::Color32::WHITE);
+                    if angle != 0.0 {
+                        let s = egui::epaint::RectShape::filled(pr, egui::CornerRadius::ZERO, egui::Color32::WHITE)
+                            .with_texture(texture.id(), uv)
+                            .with_angle(angle);
+                        painter.add(egui::Shape::Rect(s));
+                    } else {
+                        painter.image(texture.id(), pr, uv, egui::Color32::WHITE);
+                    }
                 }
         }
         "divider" => {
-            painter.rect_filled(r, egui::CornerRadius::ZERO, color(theme.border));
+            fill_rect(&painter, pr, egui::CornerRadius::ZERO, color(theme.border), angle);
         }
         "spacer" => {}
         _ => {
@@ -347,6 +518,30 @@ fn render_node(
             log::debug!("渲染跳过未知标签 <{}>", node.tag);
         }
     }
+}
+
+/// 进度平滑：每帧按时间常数朝目标值指数趋近（约 120ms 到达），避免进度跳变。
+#[derive(Clone, Copy, Default)]
+struct ProgressSmooth {
+    value: f32,
+    time: f64,
+}
+
+fn smooth_progress(ui: &egui::Ui, node_id: &str, target: f32) -> f32 {
+    let now = ui.input(|i| i.time);
+    ui.data_mut(|d| {
+        let key = egui::Id::new(("smooth-progress", node_id));
+        let mut s = d.get_temp::<ProgressSmooth>(key).unwrap_or_default();
+        let dt = (now - s.time).clamp(0.0, 0.2);
+        let alpha = ((dt / 0.12).min(1.0)) as f32;
+        s.value += (target - s.value) * alpha;
+        if (s.value - target).abs() < 0.002 {
+            s.value = target;
+        }
+        s.time = now;
+        d.insert_temp(key, s);
+        s.value
+    })
 }
 
 #[cfg(test)]
@@ -427,6 +622,7 @@ mod tests {
                     &theme,
                     &mut assets,
                     root,
+                    0.0,
                     &mut |c| clicks.push(c),
                 );
             });
