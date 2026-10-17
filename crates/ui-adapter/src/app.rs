@@ -39,6 +39,8 @@ pub struct ShellOptions {
     pub record: Option<flow_engine::InstallRecord>,
     /// 语言覆盖（--lang），优先级最高。
     pub lang: Option<String>,
+    /// 非系统标题栏模式（--no-titlebar）：窗口无原生标题栏，客户区内自绘标题栏条。
+    pub no_titlebar: bool,
 }
 
 /// 从清单 / 标记解析固定窗口尺寸。
@@ -112,6 +114,8 @@ pub struct InstallerApp {
     last_page_index: usize,
     /// 最近一次写入窗口标题栏的文本（变化时才重发 ViewportCommand）。
     last_title: Option<String>,
+    /// 非系统标题栏模式（--no-titlebar）：自绘标题栏条高度。
+    pub(crate) no_titlebar: bool,
 }
 
 /// 系统语言探测（Windows：注册表 `LocaleName`，如 "zh-CN"；其他平台回退 None）。
@@ -177,6 +181,7 @@ impl InstallerApp {
 
         // root_dir 需在 opts 移入结构体前取出（语言资源与图标加载基准）
         let root_dir = opts.root_dir.clone();
+        let no_titlebar = opts.no_titlebar;
 
         // 语言：--lang 参数 > <window locale> > 系统语言 > 默认 zh-CN
         let locale = opts
@@ -210,6 +215,7 @@ impl InstallerApp {
             page_entered_at: 0.0,
             last_page_index: 0,
             last_title: None,
+            no_titlebar,
         }
     }
 
@@ -519,6 +525,11 @@ impl eframe::App for InstallerApp {
         for click in clicks {
             events::handle_click(self, &ctx, click);
         }
+
+        // 非系统标题栏模式：客户区顶部自绘标题栏条（拖动 / 最小化 / 关闭，矢量图标）
+        if self.no_titlebar {
+            self.draw_titlebar(ui, &ctx);
+        }
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
@@ -529,6 +540,89 @@ impl eframe::App for InstallerApp {
             c.b() as f32 / 255.0,
             1.0,
         ]
+    }
+}
+
+impl InstallerApp {
+    /// 自绘标题栏条（仅 --no-titlebar 模式）：覆盖在画布顶部 32px，
+    /// 左侧应用名、右侧最小化 / 关闭按钮（矢量绘制，内联 SVG 语义，禁 emoji），
+    /// 空白区域按住拖动窗口。
+    fn draw_titlebar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        let canvas = ui.max_rect();
+        let bar = egui::Rect::from_min_size(canvas.min, egui::vec2(canvas.width(), 32.0));
+        let panel = theme::color(self.theme.panel);
+        let border = theme::color(self.theme.border);
+        let text_c = theme::color(self.theme.text);
+        let painter = ui.painter();
+
+        // 条背景 + 底部分隔线
+        painter.rect_filled(bar, egui::CornerRadius::ZERO, panel);
+        painter.line_segment(
+            [
+                egui::pos2(bar.min.x, bar.max.y - 1.0),
+                egui::pos2(bar.max.x, bar.max.y - 1.0),
+            ],
+            egui::Stroke::new(1.0, border),
+        );
+
+        // 左侧应用名
+        painter.text(
+            egui::pos2(bar.min.x + 12.0, bar.min.y + 16.0),
+            egui::Align2::LEFT_CENTER,
+            format!("{} 安装程序", self.opts.flow.app.name),
+            egui::FontId::proportional(13.0),
+            text_c,
+        );
+
+        // 右侧按钮区：最小化（横线）+ 关闭（叉），矢量绘制
+        let btn_w = 46.0;
+        let min_rect =
+            egui::Rect::from_min_size(egui::pos2(bar.max.x - btn_w * 2.0, bar.min.y), egui::vec2(btn_w, 32.0));
+        let close_rect =
+            egui::Rect::from_min_size(egui::pos2(bar.max.x - btn_w, bar.min.y), egui::vec2(btn_w, 32.0));
+
+        let min_resp = ui.interact(min_rect, ui.id().with("titlebar-min"), egui::Sense::click());
+        if min_resp.hovered() {
+            painter.rect_filled(min_rect, egui::CornerRadius::ZERO, theme::lighten(panel, 0.15));
+        }
+        let (cx, cy) = (min_rect.center().x, min_rect.center().y);
+        painter.line_segment(
+            [egui::pos2(cx - 6.0, cy), egui::pos2(cx + 6.0, cy)],
+            egui::Stroke::new(1.5, text_c),
+        );
+        if min_resp.clicked() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+        }
+
+        let close_resp = ui.interact(close_rect, ui.id().with("titlebar-close"), egui::Sense::click());
+        if close_resp.hovered() {
+            painter.rect_filled(close_rect, egui::CornerRadius::ZERO, theme::color(0xE81123));
+        }
+        let (cx, cy) = (close_rect.center().x, close_rect.center().y);
+        let s = 6.5;
+        let c = if close_resp.hovered() {
+            egui::Color32::WHITE
+        } else {
+            text_c
+        };
+        painter.line_segment(
+            [egui::pos2(cx - s, cy - s), egui::pos2(cx + s, cy + s)],
+            egui::Stroke::new(1.5, c),
+        );
+        painter.line_segment(
+            [egui::pos2(cx - s, cy + s), egui::pos2(cx + s, cy - s)],
+            egui::Stroke::new(1.5, c),
+        );
+        if close_resp.clicked() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+
+        // 空白区拖动窗口
+        let drag_rect = egui::Rect::from_min_max(bar.min, egui::pos2(min_rect.min.x, bar.max.y));
+        let drag_resp = ui.interact(drag_rect, ui.id().with("titlebar-drag"), egui::Sense::drag());
+        if drag_resp.dragged() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+        }
     }
 }
 

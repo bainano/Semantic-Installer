@@ -143,6 +143,9 @@ Idle → Validating（构建动作计划）→ Executing（后台）→ Progress
 ## 5. ui-adapter：egui 适配层
 
 - **固定窗口壳**：尺寸仅来自配置；`with_resizable(false)` + 禁最大化。
+- **非系统标题栏模式（--no-titlebar）**：`with_decorations(false)` 去掉原生标题栏与边框，
+  由引擎在客户区顶部自绘 32px 标题栏条（应用名 + 最小化 / 关闭矢量按钮 + 空白区拖动 `StartDrag`）；
+  画布尺寸不变，标题栏条覆盖画布顶部（页面默认 padding ≥ 40 不受遮挡）。安装器 / 卸载器均支持。
 - **渲染**：`PageModel` 节点树 → egui 组件——自绘按钮（圆角 / 主色 / 悬停 / 禁用）、
   自绘单选与进度条、`TextEdit` / `Checkbox` / `ComboBox` / `Texture`（PNG banner）映射；
   图层按 z 序整层渲染；动画用 `Painter` 的透明度 / 位移 / 旋转（`RectShape::with_angle`）/ 缩放实现。

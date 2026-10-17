@@ -123,6 +123,7 @@ cd myapp
 | `--theme light\|dark` | 覆盖主题 |
 | `--uninstaller <path>` | 待复制进安装目录的卸载器（配合 `copy_uninstaller=true`） |
 | `--lang <locale>` | 覆盖界面语言（如 `zh-CN` / `en-US`；缺省按 参数 > 窗口 `locale` > 系统语言 > `zh-CN`） |
+| `--no-titlebar` | 非系统标题栏模式：去掉原生标题栏，客户区自绘标题栏条（拖动 / 最小化 / 关闭） |
 | `--record <uninstall.json>` | 以卸载模式运行（等价于 `--mode uninstall`） |
 | `--dry-run install\|uninstall` | 无 GUI 全流程模拟（CI 用） |
 | `--log <path>` | 日志文件 |

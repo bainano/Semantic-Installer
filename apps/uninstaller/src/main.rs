@@ -59,6 +59,7 @@ struct Args {
     markup: Option<PathBuf>,
     theme: Option<String>,
     lang: Option<String>,
+    no_titlebar: bool,
     dry_run: bool,
     log: Option<PathBuf>,
 }
@@ -70,6 +71,7 @@ fn parse_args() -> Args {
         markup: None,
         theme: None,
         lang: None,
+        no_titlebar: false,
         dry_run: false,
         log: None,
     };
@@ -90,12 +92,13 @@ fn parse_args() -> Args {
             "--markup" => args.markup = Some(PathBuf::from(val("--markup"))),
             "--theme" => args.theme = Some(val("--theme")),
             "--lang" => args.lang = Some(val("--lang")),
+            "--no-titlebar" => args.no_titlebar = true,
             "--dry-run" => args.dry_run = true,
             "--log" => args.log = Some(PathBuf::from(val("--log"))),
             "--help" | "-h" => {
                 println!(
                     "用法：uninstaller [--record uninstall.json] [--app-id ID]\n  \
-                     [--markup uninstall.ui] [--theme light|dark] [--lang zh-CN|en-US]\n  \
+                     [--markup uninstall.ui] [--theme light|dark] [--lang zh-CN|en-US] [--no-titlebar]\n  \
                      [--dry-run] [--log PATH]"
                 );
                 std::process::exit(0);
@@ -182,15 +185,19 @@ fn main() -> ExitCode {
         uninstaller_path: None,
         record: Some(record),
         lang: args.lang.clone().or(record_locale),
+        no_titlebar: args.no_titlebar,
     };
     let app = InstallerApp::new(opts);
 
-    let viewport = eframe::egui::ViewportBuilder::default()
+    let mut viewport = eframe::egui::ViewportBuilder::default()
         .with_inner_size([w, h])
         .with_resizable(false)
         .with_maximized(false)
         .with_maximize_button(false)
         .with_title("卸载程序");
+    if args.no_titlebar {
+        viewport = viewport.with_decorations(false);
+    }
     let native_options = eframe::NativeOptions {
         viewport,
         ..Default::default()

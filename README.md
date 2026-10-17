@@ -23,6 +23,7 @@
   Windows 下自动登记「添加 / 删除程序」卸载入口。
 - **可靠性**：应用代码 0 unsafe（仅 Windows COM 互操作两处经审计 unsafe）、UI 路径无 unwrap/expect、
   panic hook 记日志后优雅退出、后台线程仅经 channel 通信。
+- **非系统标题栏模式**：`--no-titlebar` 去掉原生标题栏，客户区内自绘标题栏条（拖动 / 最小化 / 关闭）。
 - **中文字体**：自动探测系统 CJK 字体（微软雅黑 / PingFang / NotoSansCJK）注入渲染。
 
 ## 快速上手（Windows，需 Rust ≥ 1.92）
