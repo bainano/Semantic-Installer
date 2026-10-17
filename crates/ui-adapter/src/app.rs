@@ -121,6 +121,8 @@ pub struct InstallerApp {
     pub(crate) no_titlebar: bool,
     /// 透明标题栏模式（--titlebar-transparent）：条背景透明、文字带阴影。
     pub(crate) titlebar_transparent: bool,
+    /// 临时诊断：官方截图帧计数。
+    shot_frame: u32,
 }
 
 /// 系统语言探测（Windows：注册表 `LocaleName`，如 "zh-CN"；其他平台回退 None）。
@@ -223,6 +225,7 @@ impl InstallerApp {
             last_title: None,
             no_titlebar,
             titlebar_transparent,
+            shot_frame: 0,
         }
     }
 
@@ -480,6 +483,38 @@ impl eframe::App for InstallerApp {
 
         self.poll_worker(&ctx);
 
+        // 动画时间基准：页面切换后重置（每次进入页面动画重放）
+        let now = ctx.input(|i| i.time);
+        if self.current != self.last_page_index {
+            self.last_page_index = self.current;
+            self.page_entered_at = now;
+        }
+        let anim_t = now - self.page_entered_at;
+
+        // 验证机制：SEMANTIC_SHOT=1 时第 90 帧请求 egui 官方截图（唯一可靠的窗口渲染验证手段），
+        // 输出路径由 SEMANTIC_SHOT_OUT 指定，默认写入当前工作目录 plain-shot.png。
+        if std::env::var("SEMANTIC_SHOT").is_ok() {
+            self.shot_frame += 1;
+            if self.shot_frame == 90 {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));
+            }
+            if let Some(img) = ctx.input(|i| {
+                i.events.iter().find_map(|e| match e {
+                    egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                    _ => None,
+                })
+            }) {
+                let (w, h) = (img.width() as u32, img.height() as u32);
+                let mut buf = Vec::with_capacity((w * h * 4) as usize);
+                for p in &img.pixels {
+                    buf.extend_from_slice(&[p.r(), p.g(), p.b(), p.a()]);
+                }
+                let out = std::env::var("SEMANTIC_SHOT_OUT")
+                    .unwrap_or_else(|_| "plain-shot.png".into());
+                let _ = image::save_buffer(&out, &buf, w, h, image::ColorType::Rgba8);
+            }
+        }
+
         // 运行时语言切换：id="locale" 控件变更 → 重载资源并置未就绪（下帧重布局）
         if let Some(sel) = self.state.selected("locale").map(str::to_owned)
             && sel != self.locale {
@@ -507,14 +542,6 @@ impl eframe::App for InstallerApp {
                 self.last_title = Some(want);
             }
         }
-
-        // 动画时间基准：页面切换后重置（每次进入页面动画重放）
-        let now = ctx.input(|i| i.time);
-        if self.current != self.last_page_index {
-            self.last_page_index = self.current;
-            self.page_entered_at = now;
-        }
-        let anim_t = now - self.page_entered_at;
 
         let mut clicks: Vec<Click> = Vec::new();
         render::render_page(
@@ -575,19 +602,10 @@ impl InstallerApp {
             );
         }
 
-        // 左侧应用名（透明模式叠加阴影保证任意背景可读）
+        // 左侧应用名（透明模式不再叠加阴影，保持干净；可读性由开发者用半透明图层自行控制）
         let title = format!("{} 安装程序", self.opts.flow.app.name);
         let font = egui::FontId::proportional(13.0);
         let pos = egui::pos2(bar.min.x + 12.0, bar.min.y + 16.0);
-        if transparent {
-            painter.text(
-                egui::pos2(pos.x + 1.0, pos.y + 1.0),
-                egui::Align2::LEFT_CENTER,
-                title.clone(),
-                font.clone(),
-                egui::Color32::from_black_alpha(130),
-            );
-        }
         painter.text(pos, egui::Align2::LEFT_CENTER, title, font, text_c);
 
         // 右侧按钮区：最小化（横线）+ 关闭（叉），矢量绘制
@@ -609,12 +627,6 @@ impl InstallerApp {
         }
         let (cx, cy) = (min_rect.center().x, min_rect.center().y);
         let min_stroke = egui::Stroke::new(1.5, text_c);
-        if transparent {
-            painter.line_segment(
-                [egui::pos2(cx - 5.0, cy + 1.0), egui::pos2(cx + 7.0, cy + 1.0)],
-                egui::Stroke::new(1.5, egui::Color32::from_black_alpha(130)),
-            );
-        }
         painter.line_segment(
             [egui::pos2(cx - 6.0, cy), egui::pos2(cx + 6.0, cy)],
             min_stroke,
@@ -625,7 +637,7 @@ impl InstallerApp {
 
         let close_resp = ui.interact(close_rect, ui.id().with("titlebar-close"), egui::Sense::click());
         if close_resp.hovered() {
-            painter.rect_filled(close_rect, egui::CornerRadius::ZERO, theme::color(0xE81123));
+            painter.rect_filled(close_rect, egui::CornerRadius::ZERO, theme::color(0xFFE81123));
         }
         let (cx, cy) = (close_rect.center().x, close_rect.center().y);
         let s = 6.5;
@@ -634,18 +646,7 @@ impl InstallerApp {
         } else {
             text_c
         };
-        let shadow = egui::Color32::from_black_alpha(130);
         let x_stroke = egui::Stroke::new(1.5, c);
-        if transparent && !close_resp.hovered() {
-            painter.line_segment(
-                [egui::pos2(cx - s + 1.0, cy - s + 1.0), egui::pos2(cx + s + 1.0, cy + s + 1.0)],
-                egui::Stroke::new(1.5, shadow),
-            );
-            painter.line_segment(
-                [egui::pos2(cx - s + 1.0, cy + s + 1.0), egui::pos2(cx + s + 1.0, cy - s + 1.0)],
-                egui::Stroke::new(1.5, shadow),
-            );
-        }
         painter.line_segment(
             [egui::pos2(cx - s, cy - s), egui::pos2(cx + s, cy + s)],
             x_stroke,

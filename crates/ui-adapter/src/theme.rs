@@ -2,12 +2,13 @@
 
 use eframe::egui;
 
-/// 0xRRGGBB → Color32。
+/// 0xAARRGGBB → Color32（支持半透明色；无 alpha 的 `#rrggbb` 解析后 alpha=FF 不透明）。
 pub fn color(hex: u32) -> egui::Color32 {
-    egui::Color32::from_rgb(
+    egui::Color32::from_rgba_unmultiplied(
         ((hex >> 16) & 0xFF) as u8,
         ((hex >> 8) & 0xFF) as u8,
         (hex & 0xFF) as u8,
+        ((hex >> 24) & 0xFF) as u8,
     )
 }
 

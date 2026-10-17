@@ -124,7 +124,7 @@ cd myapp
 | `--uninstaller <path>` | 待复制进安装目录的卸载器（配合 `copy_uninstaller=true`） |
 | `--lang <locale>` | 覆盖界面语言（如 `zh-CN` / `en-US`；缺省按 参数 > 窗口 `locale` > 系统语言 > `zh-CN`） |
 | `--no-titlebar` | 非系统标题栏模式：去掉原生标题栏，客户区自绘标题栏条（拖动 / 最小化 / 关闭） |
-| `--titlebar-transparent` | 透明标题栏：隐式启用 `--no-titlebar`，标题栏条背景透明（透出背景图），文字 / 图标带阴影 |
+| `--titlebar-transparent` | 透明标题栏：隐式启用 `--no-titlebar`，标题栏条背景透明（透出背景图），文字 / 图标干净绘制 |
 | `--record <uninstall.json>` | 以卸载模式运行（等价于 `--mode uninstall`） |
 | `--dry-run install\|uninstall` | 无 GUI 全流程模拟（CI 用） |
 | `--log <path>` | 日志文件 |

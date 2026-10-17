@@ -168,9 +168,14 @@ pub(crate) fn render_page(
             );
         }
     } else {
-        // 图层模式：按 z 序逐层渲染，层内节点全局唯一序号（跨层 Id 不冲突）
+        // 图层模式：按 z 序逐层渲染；每层先铺自身背景（bg 属性，支持 #rrggbbaa 半透明色），
+        // 再渲染层内子节点——保证节点绘制在自身背景之上，上层图层覆盖下层图层。
         let mut global = 0usize;
         for layer in &model.layers {
+            if let Some(bg) = layer.bg {
+                ui.painter()
+                    .rect_filled(canvas, egui::CornerRadius::ZERO, color(bg));
+            }
             for (j, node) in layer.nodes.iter().enumerate() {
                 let rect = layer.rects[j];
                 render_node(

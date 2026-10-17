@@ -6,13 +6,15 @@
     <layer id="bg">
       <image src="resources/bg-santorini.jpg" width="900" height="620"/>
     </layer>
+    <!-- 半透明图层：整幅画布铺一层 69% 不透明度的白色，压浅背景提升前景文字对比度 -->
+    <layer id="shade" bg="#ffffffb0"/>
     <layer id="fg">
       <column gap="12" padding="48">
         <spacer/>
         <text size="34" weight="bold" color="#1b2733" animate="slide-up 500ms">Plain 安装向导</text>
-        <text size="15" color="#33475b" animate="fade-in 700ms">一个不依赖语言配置的自定义安装界面示例：背景图 + 图层叠加 + 简单动画。</text>
+        <text size="15" color="#33475b" animate="fade-in 700ms">一个不依赖语言配置的自定义安装界面示例：背景图 + 半透明图层 + 简单动画。</text>
         <spacer/>
-        <row gap="8" animate="fade-in 900ms">
+        <row gap="8">
           <button action="next" primary="true">开始安装</button>
           <button action="cancel">取消</button>
         </row>

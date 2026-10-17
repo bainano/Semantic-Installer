@@ -124,6 +124,8 @@ pub struct LayoutResult {
 #[derive(Debug)]
 pub struct LayerModel {
     pub id: Option<String>,
+    /// 图层背景色（`bg` 属性，0xAARRGGBB）；None 表示透明。
+    pub bg: Option<u32>,
     pub nodes: Vec<Node>,
     pub rects: Vec<Rect>,
 }
@@ -225,6 +227,7 @@ pub fn layout_page(
             res.warnings.extend(lres.warnings);
             layers.push(LayerModel {
                 id: layer.attr("id").map(str::to_owned),
+                bg: layer.attr_color("bg"),
                 nodes: flatten(layer),
                 rects: lres.rects,
             });
