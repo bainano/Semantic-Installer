@@ -1,0 +1,1 @@
+const s="/Semantic-Installer/screenshots/demo-locale.png",e="/Semantic-Installer/screenshots/demo-welcome.png",n="/Semantic-Installer/screenshots/demo-license.png",t="/Semantic-Installer/screenshots/demo-options.png",o="/Semantic-Installer/screenshots/demo-progress.png",c="/Semantic-Installer/screenshots/demo-finish.png";export{s as _,e as a,n as b,t as c,o as d,c as e};
