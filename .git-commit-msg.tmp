@@ -1,7 +1,0 @@
-feat: 语言选择前置为安装流程第一步（Phase 12）
-
-- demo 新增第一步语言选择页：先选语言，欢迎页起全程界面（含窗口标题栏）跟随所选语言
-- select options 支持 key=label（显示本地化名称，值仍为语言代码），向后兼容旧格式
-- 语言下拉默认选中当前生效语言（--lang > 窗口 locale > 系统语言 > zh-CN），界面语言与下拉一致
-- 新增 title-i18n 属性：page 标题随语言资源翻译，窗口标题启动/切页即同步
-- 文档 markup-reference §5 同步；测试 56 项全绿，clippy -D warnings 零警告
