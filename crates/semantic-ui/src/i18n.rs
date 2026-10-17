@@ -82,7 +82,18 @@ fn collect_keys(v: &toml::Value, prefix: &str, out: &mut HashMap<String, String>
 
 /// 用 i18n 资源解析带文本的节点（text / label / button / link / checkbox / radio）：
 /// 节点带 `i18n="key"` 且资源命中时替换文本；未命中保持标记默认文本（回退）。
+/// `<page title-i18n="key">`：替换 page 的 `title` 属性（窗口标题 / 页面标题多语言）。
 pub fn resolve(node: &mut Node, i18n: &I18n) {
+    if node.tag == "page"
+        && let Some(key) = node.attr("title-i18n")
+        && let Some(text) = i18n.get(key)
+    {
+        if let Some(a) = node.attrs.iter_mut().find(|a| a.name == "title") {
+            a.value = Some(text.to_owned());
+        } else {
+            node.attrs.push(crate::ast::Attribute::new("title", Some(text.to_owned())));
+        }
+    }
     let has_text = matches!(
         node.tag.as_str(),
         "text" | "label" | "button" | "link" | "checkbox" | "radio"
@@ -158,6 +169,30 @@ next = "下一步"
             .map(|t| t.text.clone().unwrap_or_default())
             .collect();
         assert_eq!(texts, vec!["Welcome", "默认"], "命中替换、未命中回退");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn resolve_page_title_i18n() {
+        let root = std::env::temp_dir().join(format!("i18n-title-{}", std::process::id()));
+        write_lang(&root, "en-US", r#"page.welcome = "Welcome""#);
+        let i18n = I18n::load(&root, "en-US");
+
+        let mut node = crate::parser::parse(
+            r#"<window width="1" height="1"><page id="welcome" title="欢迎" title-i18n="page.welcome"><text i18n="page.welcome">欢迎</text></page></window>"#,
+        )
+        .unwrap()
+        .root;
+        resolve(&mut node, &i18n);
+
+        let page = &node.children[0];
+        assert_eq!(
+            page.attr("title"),
+            Some("Welcome"),
+            "page title 属性应随资源替换"
+        );
+        // 文本内容走 i18n 键正常替换
+        assert_eq!(page.children[0].text.as_deref(), Some("Welcome"));
         let _ = fs::remove_dir_all(&root);
     }
 }

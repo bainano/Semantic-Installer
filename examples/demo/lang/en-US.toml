@@ -2,6 +2,16 @@
 # Keys map to the i18n attribute on nodes in app.ui / uninstall.ui;
 # missing keys fall back to the default text inside the markup.
 
+locale.title = "Select Language"
+locale.hint = "The installer UI will use the selected language, and the installed app will follow it too. Defaults to your system language."
+
+page.locale = "Select Language"
+page.welcome = "Welcome"
+page.license = "License Agreement"
+page.options = "Installation Options"
+page.progress = "Installing"
+page.finish = "Installation Complete"
+
 welcome.title = "Demo Installer"
 welcome.subtitle = "Version 1.0.0 · Powered by the Semantic Installer Engine"
 welcome.body = "Welcome to Demo. This installer is built on a class-HTML semantic tag\nrendering engine; the whole UI is defined in a single markup file app.ui.\nClick “Next” to start."

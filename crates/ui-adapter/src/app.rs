@@ -110,6 +110,8 @@ pub struct InstallerApp {
     page_entered_at: f64,
     /// 上一帧渲染的页面序号（检测页面切换以重置动画基准）。
     last_page_index: usize,
+    /// 最近一次写入窗口标题栏的文本（变化时才重发 ViewportCommand）。
+    last_title: Option<String>,
 }
 
 /// 系统语言探测（Windows：注册表 `LocaleName`，如 "zh-CN"；其他平台回退 None）。
@@ -185,6 +187,10 @@ impl InstallerApp {
             .unwrap_or_else(|| "zh-CN".to_owned());
         let i18n = I18n::load(&root_dir, &locale);
 
+        // 语言下拉（id="locale"）默认选中当前生效语言：--lang > 窗口 locale > 系统语言 > zh-CN，
+        // 保证界面语言与下拉显示一致（例如英文系统默认界面为英文、下拉亦选中英文）。
+        state.set_selected("locale", &locale);
+
         Self {
             opts,
             pages: HashMap::new(),
@@ -203,6 +209,7 @@ impl InstallerApp {
             i18n,
             page_entered_at: 0.0,
             last_page_index: 0,
+            last_title: None,
         }
     }
 
@@ -477,6 +484,16 @@ impl eframe::App for InstallerApp {
             ui.label(format!("页面 {page_id} 未定义，请检查标记配置。"));
             return;
         };
+
+        // 同步窗口标题与页面标题（首次进入与页面切换即生效，i18n 后为所选语言）
+        if let Some(title) = &model.title {
+            let base = self.opts.flow.app.name.clone();
+            let want = format!("{base} - {title}");
+            if self.last_title.as_deref() != Some(want.as_str()) {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Title(want.clone()));
+                self.last_title = Some(want);
+            }
+        }
 
         // 动画时间基准：页面切换后重置（每次进入页面动画重放）
         let now = ctx.input(|i| i.time);

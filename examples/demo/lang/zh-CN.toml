@@ -2,6 +2,16 @@
 # 键与 app.ui / uninstall.ui 中节点的 i18n 属性对应；
 # 缺失的键回退为标记内的默认文本。
 
+locale.title = "选择安装语言"
+locale.hint = "安装程序界面将使用所选语言，安装后的程序也将跟随此语言。默认跟随系统语言。"
+
+page.locale = "选择语言"
+page.welcome = "欢迎"
+page.license = "许可协议"
+page.options = "安装选项"
+page.progress = "正在安装"
+page.finish = "安装完成"
+
 welcome.title = "Demo 安装程序"
 welcome.subtitle = "版本 1.0.0 · 由语义化安装引擎驱动"
 welcome.body = "欢迎使用 Demo。本安装程序基于类 HTML 语义标签\n渲染引擎构建，全部界面由 app.ui 一份标记文件定义。\n点击“下一步”开始安装。"

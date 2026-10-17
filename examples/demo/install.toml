@@ -15,7 +15,7 @@ resizable = false   # 固定尺寸约束：运行时不可缩放、不可最大�
 theme = "light"
 
 [steps]
-pages = ["welcome", "license", "options", "progress", "finish"]
+pages = ["locale", "welcome", "license", "options", "progress", "finish"]
 
 [install]
 install_dir = "$LOCALAPPDATA/Demo App"

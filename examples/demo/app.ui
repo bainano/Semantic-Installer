@@ -1,6 +1,20 @@
 <window title="Demo 安装程序" width="900" height="620" theme="light">
+  <!-- ==================== 语言选择页（第一步：先选语言，界面与安装产物全程跟随） ==================== -->
+  <page id="locale" title="选择语言" title-i18n="page.locale">
+    <column gap="16" padding="48">
+      <text size="28" weight="bold" i18n="locale.title" animate="fade-in 400ms">选择安装语言</text>
+      <text size="14" color="#888" i18n="locale.hint" animate="fade-in 500ms">安装程序界面将使用所选语言，安装后的程序也将跟随此语言。默认跟随系统语言。</text>
+      <select id="locale" options="zh-CN=简体中文,en-US=English"/>
+      <spacer/>
+      <row gap="8" align="end" animate="fade-in 700ms">
+        <button action="next" primary="true" i18n="button.next">下一步</button>
+        <button action="cancel" i18n="button.cancel">取消</button>
+      </row>
+    </column>
+  </page>
+
   <!-- ==================== 欢迎页（图层演示：bg 背景层 + fg 前景层叠加） ==================== -->
-  <page id="welcome" title="欢迎">
+  <page id="welcome" title="欢迎" title-i18n="page.welcome">
     <layer id="bg" bg="#1f6feb">
       <image src="resources/banner.png" width="260" height="620"/>
     </layer>
@@ -25,7 +39,7 @@
   </page>
 
   <!-- ==================== 许可协议页 ==================== -->
-  <page id="license" title="许可协议">
+  <page id="license" title="许可协议" title-i18n="page.license">
     <column gap="12" padding="44">
       <text size="24" weight="bold" i18n="license.title">最终用户许可协议</text>
       <divider/>
@@ -58,7 +72,7 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.</text>
   </page>
 
   <!-- ==================== 安装选项页 ==================== -->
-  <page id="options" title="安装选项">
+  <page id="options" title="安装选项" title-i18n="page.options">
     <column gap="14" padding="44">
       <text size="24" weight="bold" i18n="options.title">安装选项</text>
       <text color="#888" size="13" i18n="options.hint">选择安装类型与安装位置。</text>
@@ -72,7 +86,7 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.</text>
       <checkbox id="create-shortcut" checked="true" i18n="options.shortcut">创建桌面快捷方式</checkbox>
 
       <text size="14" weight="bold" i18n="options.language">界面语言</text>
-      <select id="locale" options="zh-CN,en-US"/>
+      <select id="locale" options="zh-CN=简体中文,en-US=English"/>
 
       <spacer/>
       <row gap="8" align="end">
@@ -84,7 +98,7 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.</text>
   </page>
 
   <!-- ==================== 安装进度页 ==================== -->
-  <page id="progress" title="正在安装">
+  <page id="progress" title="正在安装" title-i18n="page.progress">
     <column gap="16" padding="44">
       <text size="24" weight="bold" i18n="progress.title" animate="fade-in 300ms">正在安装…</text>
       <progress id="progress"/>
@@ -94,7 +108,7 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.</text>
   </page>
 
   <!-- ==================== 完成页 ==================== -->
-  <page id="finish" title="安装完成">
+  <page id="finish" title="安装完成" title-i18n="page.finish">
     <column gap="14" padding="44">
       <text size="24" weight="bold" i18n="finish.title" animate="fade-in 300ms">安装完成</text>
       <text color="#666" i18n="finish.done" animate="slide-up 400ms">Demo 已成功安装到您的计算机。</text>

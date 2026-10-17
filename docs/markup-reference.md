@@ -101,15 +101,20 @@ button.next = "下一步"
 
 - 任意带文本的节点（`text / label / button / link / checkbox / radio`）可写
   `i18n="键"`，资源命中时**布局与渲染**都使用资源文本；未命中时回退节点默认文本；
+- `<page title-i18n="键">`：页面标题（`title` 属性）随语言资源翻译，窗口标题栏同步；
 - 资源支持扁平键（`"welcome.title" = "…"`）与嵌套节（`[welcome] title = "…"`），统一归一为点分键；
 - **语言优先级链**：`--lang` 参数 > `<window locale>` > 系统语言（Windows 注册表） > 默认 `zh-CN`；
-- **运行时切换**：`<select id="locale" options="zh-CN,en-US"/>`（引擎约定键），切换即全界面重渲染；
+  语言下拉（`id="locale"`）默认选中当前生效语言，保证界面语言与下拉一致；
+- **运行时切换**：`<select id="locale" options="zh-CN=简体中文,en-US=English"/>`
+  （引擎约定键 `id="locale"`；选项支持 `key=label` 显示本地化名称，值仍为语言代码），
+  切换即全界面重渲染；
 - **安装后联动**：清单 `[locale]` 段把所选语言写入应用配置 / 注册表，
   被安装程序启动时读取即可跟随语言；卸载器自动读取安装记录中的语言显示同语言界面。
 
 ```xml
 <text i18n="welcome.title">欢迎</text>                       <!-- 回退默认文本 -->
-<select id="locale" options="zh-CN,en-US"/>
+<page id="locale" title="选择语言" title-i18n="page.locale"/> <!-- 页面标题随语言翻译 -->
+<select id="locale" options="zh-CN=简体中文,en-US=English"/>   <!-- key=label 显示本地化名称 -->
 ```
 
 ```toml
@@ -283,7 +288,7 @@ kind    = fade-in | slide-up | slide-down | slide-left | slide-right | spin | pu
       <text size="24" weight="bold" i18n="options.title">安装选项</text>
       <input id="install-dir" placeholder="$LOCALAPPDATA/Demo App" browse="true"/>
       <checkbox id="create-shortcut" checked="true" i18n="options.shortcut">创建桌面快捷方式</checkbox>
-      <select id="locale" options="zh-CN,en-US"/>
+      <select id="locale" options="zh-CN=简体中文,en-US=English"/>
       <spacer/>
       <row gap="8" align="end">
         <button action="back" i18n="button.back">上一步</button>

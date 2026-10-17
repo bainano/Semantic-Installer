@@ -29,6 +29,24 @@ struct AnimState {
     scale: f32,
 }
 
+/// 解析 `<select options>`：支持 `key=label` 形式（值 = key，显示 = label），
+/// 无 `=` 时显示与值相同（向后兼容）。例：
+/// `"zh-CN=简体中文,en-US=English"` → `[("zh-CN","简体中文"), ("en-US","English")]`；
+/// `"a,b"` → `[("a","a"), ("b","b")]`。
+fn parse_select_options(raw: Option<&str>) -> Vec<(String, String)> {
+    raw.map(|s| {
+        s.split(',')
+            .map(str::trim)
+            .filter(|x| !x.is_empty())
+            .map(|x| match x.split_once('=') {
+                Some((k, l)) => (k.trim().to_owned(), l.trim().to_owned()),
+                None => (x.to_owned(), x.to_owned()),
+            })
+            .collect()
+    })
+    .unwrap_or_default()
+}
+
 fn ease_out(k: f64) -> f64 {
     1.0 - (1.0 - k) * (1.0 - k)
 }
@@ -433,28 +451,25 @@ fn render_node(
         }
         "select" => {
             let id_str = node.attr("id").unwrap_or_default().to_owned();
-            let options: Vec<String> = node
-                .attr("options")
-                .map(|s| {
-                    s.split(',')
-                        .map(|x| x.trim().to_owned())
-                        .filter(|x| !x.is_empty())
-                        .collect()
-                })
-                .unwrap_or_default();
+            let options = parse_select_options(node.attr("options"));
             let mut sel = state
                 .selected(&id_str)
                 .map(str::to_owned)
-                .or_else(|| options.first().cloned())
+                .or_else(|| options.first().map(|(k, _)| k.clone()))
                 .unwrap_or_default();
             let mut changed = false;
             ui.scope_builder(egui::UiBuilder::new().max_rect(hit_r), |ui| {
+                let label = options
+                    .iter()
+                    .find(|(k, _)| k == &sel)
+                    .map(|(_, l)| l.clone())
+                    .unwrap_or_else(|| sel.clone());
                 let combo = egui::ComboBox::from_id_salt(id_str.clone())
-                    .selected_text(sel.clone())
+                    .selected_text(label)
                     .width(hit_r.width());
                 let resp = combo.show_ui(ui, |ui| {
-                    for opt in &options {
-                        ui.selectable_value(&mut sel, opt.clone(), opt.clone());
+                    for (k, l) in &options {
+                        ui.selectable_value(&mut sel, k.clone(), l.clone());
                     }
                 });
                 changed = resp.inner.is_some() || resp.response.changed();
@@ -654,5 +669,29 @@ mod tests {
             clicks.iter().any(|c| c.action.as_deref() == Some("next")),
             "点击「下一步」应产出 next 动作，实际点击事件：{clicks:?}"
         );
+    }
+
+    /// `<select options>` 的 key=label 解析：值 = key，显示 = label；无 `=` 时兼容旧格式。
+    #[test]
+    fn select_options_parse_key_label() {
+        let opts = parse_select_options(Some("zh-CN=简体中文,en-US=English"));
+        assert_eq!(
+            opts,
+            vec![
+                ("zh-CN".to_owned(), "简体中文".to_owned()),
+                ("en-US".to_owned(), "English".to_owned()),
+            ]
+        );
+
+        // 旧格式：显示 = 值
+        let opts = parse_select_options(Some("a, b"));
+        assert_eq!(
+            opts,
+            vec![("a".to_owned(), "a".to_owned()), ("b".to_owned(), "b".to_owned())]
+        );
+
+        // 空 / 缺省
+        assert!(parse_select_options(None).is_empty());
+        assert!(parse_select_options(Some(" , ")).is_empty());
     }
 }
