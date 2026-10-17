@@ -5,6 +5,7 @@
 //! installer --manifest install.toml --markup app.ui [--theme light|dark]
 //!           [--lang zh-CN|en-US]                  # 覆盖语言（缺省：<window locale> > 系统 > zh-CN）
 //!           [--no-titlebar]                       # 非系统标题栏模式（客户区自绘标题栏条）
+//!           [--titlebar-transparent]              # 透明标题栏条（透出背景图，文字带阴影）
 //!           [--uninstaller path\to\uninstaller.exe]
 //!           [--record uninstall.json]          # 等价于 --mode uninstall
 //!           [--dry-run install|uninstall]      # 无 GUI 全流程模拟
@@ -23,6 +24,7 @@ struct Args {
     theme: Option<String>,
     lang: Option<String>,
     no_titlebar: bool,
+    titlebar_transparent: bool,
     uninstaller: Option<PathBuf>,
     record: Option<PathBuf>,
     app_id: Option<String>,
@@ -37,6 +39,7 @@ fn parse_args() -> Args {
         theme: None,
         lang: None,
         no_titlebar: false,
+        titlebar_transparent: false,
         uninstaller: None,
         record: None,
         app_id: None,
@@ -60,6 +63,7 @@ fn parse_args() -> Args {
             "--theme" => args.theme = Some(val("--theme").unwrap()),
             "--lang" => args.lang = Some(val("--lang").unwrap()),
             "--no-titlebar" => args.no_titlebar = true,
+            "--titlebar-transparent" => args.titlebar_transparent = true,
             "--uninstaller" => args.uninstaller = Some(PathBuf::from(val("--uninstaller").unwrap())),
             "--record" => args.record = Some(PathBuf::from(val("--record").unwrap())),
             "--app-id" => args.app_id = Some(val("--app-id").unwrap()),
@@ -68,8 +72,8 @@ fn parse_args() -> Args {
             "--help" | "-h" => {
                 println!(
                     "用法：installer [--manifest PATH] [--markup PATH] [--theme light|dark]\n  \
-                     [--lang zh-CN|en-US] [--no-titlebar] [--uninstaller PATH] [--record uninstall.json]\n  \
-                     [--dry-run install|uninstall] [--log PATH]"
+                     [--lang zh-CN|en-US] [--no-titlebar] [--titlebar-transparent]\n  \
+                     [--uninstaller PATH] [--record uninstall.json] [--dry-run install|uninstall] [--log PATH]"
                 );
                 std::process::exit(0);
             }
@@ -131,7 +135,8 @@ fn run_gui(mode: Mode, args: &Args, flow: &FlowSpec, record: Option<flow_engine:
         uninstaller_path: args.uninstaller.clone(),
         record,
         lang: args.lang.clone(),
-        no_titlebar: args.no_titlebar,
+        no_titlebar: args.no_titlebar || args.titlebar_transparent,
+        titlebar_transparent: args.titlebar_transparent,
     };
     let app = InstallerApp::new(opts);
 
@@ -141,8 +146,8 @@ fn run_gui(mode: Mode, args: &Args, flow: &FlowSpec, record: Option<flow_engine:
         .with_maximized(false)
         .with_maximize_button(false)
         .with_title(title);
-    if args.no_titlebar {
-        // 非系统标题栏模式：去掉原生标题栏与边框，标题栏条由引擎在客户区自绘
+    if args.no_titlebar || args.titlebar_transparent {
+        // 非系统标题栏 / 透明标题栏模式：去掉原生标题栏与边框，标题栏条由引擎在客户区自绘
         viewport = viewport.with_decorations(false);
     }
     let native_options = eframe::NativeOptions {

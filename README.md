@@ -23,7 +23,10 @@
   Windows 下自动登记「添加 / 删除程序」卸载入口。
 - **可靠性**：应用代码 0 unsafe（仅 Windows COM 互操作两处经审计 unsafe）、UI 路径无 unwrap/expect、
   panic hook 记日志后优雅退出、后台线程仅经 channel 通信。
-- **非系统标题栏模式**：`--no-titlebar` 去掉原生标题栏，客户区内自绘标题栏条（拖动 / 最小化 / 关闭）。
+- **非系统标题栏模式**：`--no-titlebar` 去掉原生标题栏，客户区内自绘标题栏条（拖动 / 最小化 / 关闭）；
+  `--titlebar-transparent` 进一步让标题栏条透明（透出背景图），文字与图标带阴影保证任意背景下可读。
+- **图层渲染**：页面直接子节点可为 `<layer>`，各图层在整幅画布上独立布局、按声明顺序叠加，
+  可铺背景图再叠加前景文字，天然支持精美背景自定义。
 - **中文字体**：自动探测系统 CJK 字体（微软雅黑 / PingFang / NotoSansCJK）注入渲染。
 
 ## 快速上手（Windows，需 Rust ≥ 1.92）
@@ -54,7 +57,9 @@ installer-engine/
 ├── apps/
 │   ├── installer/      安装程序入口（薄二进制）
 │   └── uninstaller/    一体化卸载工具入口（内置默认界面，支持 --markup 覆盖）
-└── examples/demo/      完整示例：app.ui + install.toml + 资源 + 负载
+└── examples/
+    ├── demo/      完整示例：app.ui + install.toml + 资源（含多语言、语言页前置）
+    └── plain/     极简自定义示例：无语言页、JPG 背景图 + 图层 + 透明标题栏
 ```
 
 ## 文档

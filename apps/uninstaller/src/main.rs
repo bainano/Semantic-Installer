@@ -60,6 +60,7 @@ struct Args {
     theme: Option<String>,
     lang: Option<String>,
     no_titlebar: bool,
+    titlebar_transparent: bool,
     dry_run: bool,
     log: Option<PathBuf>,
 }
@@ -72,6 +73,7 @@ fn parse_args() -> Args {
         theme: None,
         lang: None,
         no_titlebar: false,
+        titlebar_transparent: false,
         dry_run: false,
         log: None,
     };
@@ -93,13 +95,14 @@ fn parse_args() -> Args {
             "--theme" => args.theme = Some(val("--theme")),
             "--lang" => args.lang = Some(val("--lang")),
             "--no-titlebar" => args.no_titlebar = true,
+            "--titlebar-transparent" => args.titlebar_transparent = true,
             "--dry-run" => args.dry_run = true,
             "--log" => args.log = Some(PathBuf::from(val("--log"))),
             "--help" | "-h" => {
                 println!(
                     "用法：uninstaller [--record uninstall.json] [--app-id ID]\n  \
-                     [--markup uninstall.ui] [--theme light|dark] [--lang zh-CN|en-US] [--no-titlebar]\n  \
-                     [--dry-run] [--log PATH]"
+                     [--markup uninstall.ui] [--theme light|dark] [--lang zh-CN|en-US]\n  \
+                     [--no-titlebar] [--titlebar-transparent] [--dry-run] [--log PATH]"
                 );
                 std::process::exit(0);
             }
@@ -185,7 +188,8 @@ fn main() -> ExitCode {
         uninstaller_path: None,
         record: Some(record),
         lang: args.lang.clone().or(record_locale),
-        no_titlebar: args.no_titlebar,
+        no_titlebar: args.no_titlebar || args.titlebar_transparent,
+        titlebar_transparent: args.titlebar_transparent,
     };
     let app = InstallerApp::new(opts);
 
@@ -195,7 +199,7 @@ fn main() -> ExitCode {
         .with_maximized(false)
         .with_maximize_button(false)
         .with_title("卸载程序");
-    if args.no_titlebar {
+    if args.no_titlebar || args.titlebar_transparent {
         viewport = viewport.with_decorations(false);
     }
     let native_options = eframe::NativeOptions {

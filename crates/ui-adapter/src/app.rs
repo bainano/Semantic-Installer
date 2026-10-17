@@ -41,6 +41,9 @@ pub struct ShellOptions {
     pub lang: Option<String>,
     /// 非系统标题栏模式（--no-titlebar）：窗口无原生标题栏，客户区内自绘标题栏条。
     pub no_titlebar: bool,
+    /// 透明标题栏（--titlebar-transparent）：自绘标题栏条背景透明（透出背景图），
+    /// 文字带阴影保证可读；按钮 hover 才出现背景块。
+    pub titlebar_transparent: bool,
 }
 
 /// 从清单 / 标记解析固定窗口尺寸。
@@ -116,6 +119,8 @@ pub struct InstallerApp {
     last_title: Option<String>,
     /// 非系统标题栏模式（--no-titlebar）：自绘标题栏条高度。
     pub(crate) no_titlebar: bool,
+    /// 透明标题栏模式（--titlebar-transparent）：条背景透明、文字带阴影。
+    pub(crate) titlebar_transparent: bool,
 }
 
 /// 系统语言探测（Windows：注册表 `LocaleName`，如 "zh-CN"；其他平台回退 None）。
@@ -182,6 +187,7 @@ impl InstallerApp {
         // root_dir 需在 opts 移入结构体前取出（语言资源与图标加载基准）
         let root_dir = opts.root_dir.clone();
         let no_titlebar = opts.no_titlebar;
+        let titlebar_transparent = opts.titlebar_transparent;
 
         // 语言：--lang 参数 > <window locale> > 系统语言 > 默认 zh-CN
         let locale = opts
@@ -216,6 +222,7 @@ impl InstallerApp {
             last_page_index: 0,
             last_title: None,
             no_titlebar,
+            titlebar_transparent,
         }
     }
 
@@ -554,25 +561,34 @@ impl InstallerApp {
         let border = theme::color(self.theme.border);
         let text_c = theme::color(self.theme.text);
         let painter = ui.painter();
+        let transparent = self.titlebar_transparent;
 
-        // 条背景 + 底部分隔线
-        painter.rect_filled(bar, egui::CornerRadius::ZERO, panel);
-        painter.line_segment(
-            [
-                egui::pos2(bar.min.x, bar.max.y - 1.0),
-                egui::pos2(bar.max.x, bar.max.y - 1.0),
-            ],
-            egui::Stroke::new(1.0, border),
-        );
+        // 条背景 + 底部分隔线（透明模式省略，透出背景图）
+        if !transparent {
+            painter.rect_filled(bar, egui::CornerRadius::ZERO, panel);
+            painter.line_segment(
+                [
+                    egui::pos2(bar.min.x, bar.max.y - 1.0),
+                    egui::pos2(bar.max.x, bar.max.y - 1.0),
+                ],
+                egui::Stroke::new(1.0, border),
+            );
+        }
 
-        // 左侧应用名
-        painter.text(
-            egui::pos2(bar.min.x + 12.0, bar.min.y + 16.0),
-            egui::Align2::LEFT_CENTER,
-            format!("{} 安装程序", self.opts.flow.app.name),
-            egui::FontId::proportional(13.0),
-            text_c,
-        );
+        // 左侧应用名（透明模式叠加阴影保证任意背景可读）
+        let title = format!("{} 安装程序", self.opts.flow.app.name);
+        let font = egui::FontId::proportional(13.0);
+        let pos = egui::pos2(bar.min.x + 12.0, bar.min.y + 16.0);
+        if transparent {
+            painter.text(
+                egui::pos2(pos.x + 1.0, pos.y + 1.0),
+                egui::Align2::LEFT_CENTER,
+                title.clone(),
+                font.clone(),
+                egui::Color32::from_black_alpha(130),
+            );
+        }
+        painter.text(pos, egui::Align2::LEFT_CENTER, title, font, text_c);
 
         // 右侧按钮区：最小化（横线）+ 关闭（叉），矢量绘制
         let btn_w = 46.0;
@@ -583,12 +599,25 @@ impl InstallerApp {
 
         let min_resp = ui.interact(min_rect, ui.id().with("titlebar-min"), egui::Sense::click());
         if min_resp.hovered() {
-            painter.rect_filled(min_rect, egui::CornerRadius::ZERO, theme::lighten(panel, 0.15));
+            // 浅色主题：标准标题栏按钮 hover 浅灰块；深色主题：半透明白
+            let hover = if self.theme.name == "dark" {
+                egui::Color32::from_rgba_unmultiplied(255, 255, 255, 30)
+            } else {
+                egui::Color32::from_rgb(0xE5, 0xE5, 0xE5)
+            };
+            painter.rect_filled(min_rect, egui::CornerRadius::ZERO, hover);
         }
         let (cx, cy) = (min_rect.center().x, min_rect.center().y);
+        let min_stroke = egui::Stroke::new(1.5, text_c);
+        if transparent {
+            painter.line_segment(
+                [egui::pos2(cx - 5.0, cy + 1.0), egui::pos2(cx + 7.0, cy + 1.0)],
+                egui::Stroke::new(1.5, egui::Color32::from_black_alpha(130)),
+            );
+        }
         painter.line_segment(
             [egui::pos2(cx - 6.0, cy), egui::pos2(cx + 6.0, cy)],
-            egui::Stroke::new(1.5, text_c),
+            min_stroke,
         );
         if min_resp.clicked() {
             ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
@@ -605,13 +634,25 @@ impl InstallerApp {
         } else {
             text_c
         };
+        let shadow = egui::Color32::from_black_alpha(130);
+        let x_stroke = egui::Stroke::new(1.5, c);
+        if transparent && !close_resp.hovered() {
+            painter.line_segment(
+                [egui::pos2(cx - s + 1.0, cy - s + 1.0), egui::pos2(cx + s + 1.0, cy + s + 1.0)],
+                egui::Stroke::new(1.5, shadow),
+            );
+            painter.line_segment(
+                [egui::pos2(cx - s + 1.0, cy + s + 1.0), egui::pos2(cx + s + 1.0, cy - s + 1.0)],
+                egui::Stroke::new(1.5, shadow),
+            );
+        }
         painter.line_segment(
             [egui::pos2(cx - s, cy - s), egui::pos2(cx + s, cy + s)],
-            egui::Stroke::new(1.5, c),
+            x_stroke,
         );
         painter.line_segment(
             [egui::pos2(cx - s, cy + s), egui::pos2(cx + s, cy - s)],
-            egui::Stroke::new(1.5, c),
+            x_stroke,
         );
         if close_resp.clicked() {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);

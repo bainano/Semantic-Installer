@@ -1,0 +1,67 @@
+<window title="Plain 安装程序" width="900" height="620" theme="light">
+  <!-- ==================== 欢迎页：无语言页的自定义界面示例 ====================
+       背景图层：整幅画布铺满 JPG 背景图（圣托里尼，2100x1400 拉伸至 900x620）；
+       前景图层：深色文字 + 动画。不依赖任何 lang/ 语言资源（缺失自动回退默认文本）。 -->
+  <page id="welcome" title="欢迎">
+    <layer id="bg">
+      <image src="resources/bg-santorini.jpg" width="900" height="620"/>
+    </layer>
+    <layer id="fg">
+      <column gap="12" padding="48">
+        <spacer/>
+        <text size="34" weight="bold" color="#1b2733" animate="slide-up 500ms">Plain 安装向导</text>
+        <text size="15" color="#33475b" animate="fade-in 700ms">一个不依赖语言配置的自定义安装界面示例：背景图 + 图层叠加 + 简单动画。</text>
+        <spacer/>
+        <row gap="8" animate="fade-in 900ms">
+          <button action="next" primary="true">开始安装</button>
+          <button action="cancel">取消</button>
+        </row>
+      </column>
+    </layer>
+  </page>
+
+  <!-- ==================== 安装选项页 ==================== -->
+  <page id="options" title="安装选项">
+    <column gap="14" padding="44">
+      <text size="24" weight="bold">安装选项</text>
+      <text color="#888" size="13">选择安装类型与安装位置。</text>
+
+      <radio group="install-type" value="typical" checked="true">典型安装（推荐）</radio>
+      <radio group="install-type" value="custom">自定义安装</radio>
+
+      <text size="14" weight="bold">安装目录</text>
+      <input id="install-dir" placeholder="$LOCALAPPDATA/Plain App" browse="true"/>
+
+      <checkbox id="create-shortcut" checked="true">创建桌面快捷方式</checkbox>
+
+      <spacer/>
+      <row gap="8" align="end">
+        <button action="back">上一步</button>
+        <button action="install" primary="true">安装</button>
+        <button action="cancel">取消</button>
+      </row>
+    </column>
+  </page>
+
+  <!-- ==================== 安装进度页 ==================== -->
+  <page id="progress" title="正在安装">
+    <column gap="16" padding="44">
+      <text size="24" weight="bold" animate="fade-in 300ms">正在安装…</text>
+      <progress id="progress"/>
+      <spacer/>
+      <text id="progress-hint" size="13" color="#999" animate="pulse 1500ms infinite">请勿关闭窗口。</text>
+    </column>
+  </page>
+
+  <!-- ==================== 完成页 ==================== -->
+  <page id="finish" title="安装完成">
+    <column gap="14" padding="44">
+      <text size="24" weight="bold" animate="fade-in 300ms">安装完成</text>
+      <text color="#666" animate="slide-up 400ms">Plain 已成功安装到您的计算机。</text>
+      <spacer/>
+      <row gap="8" align="end" animate="scale-in 300ms">
+        <button action="finish" primary="true">完成</button>
+      </row>
+    </column>
+  </page>
+</window>

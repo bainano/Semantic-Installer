@@ -200,9 +200,8 @@ pub fn layout_page(
         .ok_or_else(|| format!("page（第 {} 行）缺少 id 属性", page.span.line))?
         .to_owned();
     let mut res = LayoutResult::default();
-    layout_node(page, canvas, theme, m, &mut res);
-
-    // 图层模式：page 直接子节点为 <layer> 时，每个图层在整幅画布上独立布局
+    // 图层模式：page 直接子节点为 <layer> 时，每个图层在整幅画布上独立布局；
+    // 此时跳过整页普通布局，避免对图层容器重复计算产生溢出噪音。
     let has_layers = page.children.iter().any(|c| c.is("layer"));
     let mut layers = Vec::new();
     if has_layers {
@@ -230,6 +229,8 @@ pub fn layout_page(
                 rects: lres.rects,
             });
         }
+    } else {
+        layout_node(page, canvas, theme, m, &mut res);
     }
 
     Ok(PageModel {

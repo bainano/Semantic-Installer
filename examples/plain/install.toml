@@ -1,0 +1,33 @@
+# Plain 安装清单（install.toml）
+# 无语言页示例：验证引擎不依赖语言配置即可构建高度自定义的安装界面。
+# 注意：本示例不带 lang/ 目录与 [locale] 段——语言资源缺失时引擎自动回退标记默认文本。
+
+[app]
+name = "Plain"
+id = "com.example.plain"
+version = "1.0.0"
+publisher = "Example Co."
+
+[window]
+width = 900
+height = 620
+resizable = false   # 固定尺寸约束：运行时不可缩放、不可最大化
+theme = "light"
+
+[steps]
+pages = ["welcome", "options", "progress", "finish"]
+
+[install]
+install_dir = "$LOCALAPPDATA/Plain App"
+copy_uninstaller = false
+
+# 精简演示：仅写一个信息文件（无注册表 / 快捷方式）
+[[install.items]]
+type = "write-file"
+path = "$INSTALL_DIR/install-info.txt"
+content = "Plain 1.0.0 · 由 Semantic Installer 引擎安装\n"
+
+[uninstall]
+keep_user_data = []
+remove_shortcuts = false
+remove_registry = false
