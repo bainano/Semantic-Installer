@@ -4,6 +4,8 @@ export default defineConfig({
   lang: 'zh-CN',
   title: 'Semantic Installer',
   description: '基于 Rust + egui 的类 HTML 语义化安装引擎 —— 完全开源，让安装界面像写网页一样简单',
+  // GitHub Pages 项目站点路径（仓库级站点必须，否则静态资源 404）
+  base: '/Semantic-Installer/',
   cleanUrls: true,
   lastUpdated: true,
 
