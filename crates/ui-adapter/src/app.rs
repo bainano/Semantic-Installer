@@ -123,6 +123,14 @@ pub struct InstallerApp {
     pub(crate) titlebar_transparent: bool,
     /// 临时诊断：官方截图帧计数。
     shot_frame: u32,
+    /// 截图请求队列（页面 id, 序号）——请求后等待 Event::Screenshot 回来再保存。
+    shot_requests: std::collections::VecDeque<(String, u32)>,
+    /// 截图序号。
+    shot_seq: u32,
+    /// 自动翻页截图是否已覆盖最后页面（finish），之后停止请求。
+    autopage_done: bool,
+    /// start_install 后快速截图进度页的帧号（不等待 60 帧周期，避免安装过快错过）。
+    shot_progress_at: Option<u32>,
 }
 
 /// 系统语言探测（Windows：注册表 `LocaleName`，如 "zh-CN"；其他平台回退 None）。
@@ -226,6 +234,10 @@ impl InstallerApp {
             no_titlebar,
             titlebar_transparent,
             shot_frame: 0,
+            shot_requests: std::collections::VecDeque::new(),
+            shot_seq: 0,
+            autopage_done: false,
+            shot_progress_at: None,
         }
     }
 
@@ -264,6 +276,11 @@ impl InstallerApp {
     pub(crate) fn current_model(&self) -> Option<&PageModel> {
         let id = self.order.get(self.current)?;
         self.pages.get(id)
+    }
+
+    /// 当前页 id（顺序数组中的 id 字符串）。
+    fn current_page_id(&self) -> Option<&str> {
+        self.order.get(self.current).map(String::as_str)
     }
 
     pub(crate) fn goto(&mut self, id: &str) {
@@ -491,12 +508,78 @@ impl eframe::App for InstallerApp {
         }
         let anim_t = now - self.page_entered_at;
 
-        // 验证机制：SEMANTIC_SHOT=1 时第 90 帧请求 egui 官方截图（唯一可靠的窗口渲染验证手段），
-        // 输出路径由 SEMANTIC_SHOT_OUT 指定，默认写入当前工作目录 plain-shot.png。
+        // 验证机制：SEMANTIC_SHOT=1 时请求 egui 官方截图（唯一可靠的窗口渲染验证手段）。
+        //  - 默认模式：第 90 帧截一张当前页，输出 SEMANTIC_SHOT_OUT（默认 plain-shot.png）。
+        //  - SEMANTIC_SHOT_AUTOPAGE=1 自动翻页模式：每 60 帧截当前页，间隔后按流程自动前进，
+        //    覆盖 locale → welcome → license → options → progress → finish 全流程，
+        //    输出到 SEMANTIC_SHOT_DIR（默认 shots/），文件名 {seq:02d}-{page}.png。
+        //  - SEMANTIC_SHOT_PAGE=xxx：首帧跳转到指定页（progress 自动开始安装）。
+        //  - SEMANTIC_SHOT_EXIT=1：截图保存后优雅关闭窗口。
         if std::env::var("SEMANTIC_SHOT").is_ok() {
+            // 强制持续重绘：无动画页面（如 license/options）在数帧后事件循环会进入空闲，
+            // 永远到不了目标截图帧；以 60fps 请求持续重绘直至截图完成。
+            ctx.request_repaint_after(Duration::from_millis(16));
             self.shot_frame += 1;
-            if self.shot_frame == 90 {
-                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));
+            let autopage = std::env::var("SEMANTIC_SHOT_AUTOPAGE").is_ok();
+            let page_id = self.current_page_id().map(str::to_owned);
+            // 指定目标页：SEMANTIC_SHOT_PAGE=xxx 时首帧直接跳转
+            if self.shot_frame == 1 {
+                if let Ok(target) = std::env::var("SEMANTIC_SHOT_PAGE") {
+                    if !target.is_empty() {
+                        self.goto(&target);
+                    }
+                }
+            }
+            // progress 页截图：延迟到第 16 帧再开始安装，先截到安装前的进度页画面
+            //（demo 安装极快，若首帧即 start_install，截图帧时流程已跳到 finish）
+            if self.shot_frame == 16
+                && std::env::var("SEMANTIC_SHOT_PAGE").as_deref() == Ok("progress")
+            {
+                self.start_install();
+            }
+            if autopage && !self.autopage_done {
+                let f = self.shot_frame;
+                // 每个 60 帧周期：f%60==1 截图当前页，f%60==45 执行流程动作
+                if f % 60 == 1 {
+                    if let Some(id) = &page_id {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));
+                        self.shot_requests.push_back((id.clone(), self.shot_seq));
+                        self.shot_seq += 1;
+                        if id == "finish" {
+                            self.autopage_done = true;
+                        }
+                    }
+                } else if f % 60 == 45 {
+                    match page_id.as_deref() {
+                        Some("locale" | "welcome" | "license") => {
+                            if self.current + 1 < self.order.len() {
+                                self.current += 1;
+                            }
+                        }
+                        Some("options") => {
+                            self.start_install();
+                            self.shot_progress_at = Some(self.shot_frame + 3);
+                        }
+                        _ => {}
+                    }
+                }
+                // progress 页快速截图（进入后 3 帧，不等 60 帧周期）
+                if let Some(at) = self.shot_progress_at
+                    && f >= at {
+                        self.shot_progress_at = None;
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));
+                        self.shot_requests.push_back(("progress".into(), self.shot_seq));
+                        self.shot_seq += 1;
+                    }
+            } else {
+                // 单张模式：截当前页（可用 SEMANTIC_SHOT_PAGE 指定目标页）。
+                // progress 页在安装进行中（第 15 帧）截图，避免安装过快直接跳到 finish。
+                let shot_at = if page_id.as_deref() == Some("progress") { 15 } else { 90 };
+                if self.shot_frame == shot_at {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));
+                    self.shot_requests.push_back((page_id.unwrap_or_default(), self.shot_seq));
+                    self.shot_seq += 1;
+                }
             }
             if let Some(img) = ctx.input(|i| {
                 i.events.iter().find_map(|e| match e {
@@ -504,14 +587,21 @@ impl eframe::App for InstallerApp {
                     _ => None,
                 })
             }) {
-                let (w, h) = (img.width() as u32, img.height() as u32);
-                let mut buf = Vec::with_capacity((w * h * 4) as usize);
-                for p in &img.pixels {
-                    buf.extend_from_slice(&[p.r(), p.g(), p.b(), p.a()]);
+                if let Some((page, seq)) = self.shot_requests.pop_front() {
+                    let (w, h) = (img.width() as u32, img.height() as u32);
+                    let mut buf = Vec::with_capacity((w * h * 4) as usize);
+                    for p in &img.pixels {
+                        buf.extend_from_slice(&[p.r(), p.g(), p.b(), p.a()]);
+                    }
+                    let dir = std::env::var("SEMANTIC_SHOT_DIR").unwrap_or_else(|_| "shots".into());
+                    let _ = std::fs::create_dir_all(&dir);
+                    let out = std::path::Path::new(&dir).join(format!("{seq:02}-{page}.png"));
+                    let _ = image::save_buffer(&out, &buf, w, h, image::ColorType::Rgba8);
+                    // SEMANTIC_SHOT_EXIT=1：保存后优雅关闭窗口，避免强杀进程造成资源竞争
+                    if std::env::var("SEMANTIC_SHOT_EXIT").is_ok() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
                 }
-                let out = std::env::var("SEMANTIC_SHOT_OUT")
-                    .unwrap_or_else(|_| "plain-shot.png".into());
-                let _ = image::save_buffer(&out, &buf, w, h, image::ColorType::Rgba8);
             }
         }
 

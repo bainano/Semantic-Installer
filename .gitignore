@@ -5,3 +5,9 @@
 /plain-shot.png
 
 /947-2100x1400.jpg
+
+# 官网工程：依赖与构建产物不入库（pages 分支承载部署产物）
+docs/node_modules/
+docs/.vitepress/dist/
+*.bak
+
